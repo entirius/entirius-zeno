@@ -65,9 +65,11 @@ health:  ## Verify infra healthchecks + service HTTP
 migrate:  ## Apply service migrations
 	$(COMPOSE) exec service python manage.py migrate
 
+# -p no:cacheprovider: container runs as root — a cache dir would land root-owned
+# on the bind-mounted repo in dev mode
 test:  ## Migration drift check + service test suite (against postgres)
 	$(COMPOSE) exec service python manage.py makemigrations --check --dry-run
-	$(COMPOSE) exec service pytest -x -q
+	$(COMPOSE) exec service pytest -x -q -p no:cacheprovider
 
 check:  ## Verify canonical .gitleaks.toml is linked
 	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
