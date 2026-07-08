@@ -1,0 +1,16 @@
+# Local configuration
+.env
+
+# Source code (local clones, never committed here)
+repos/
+
+# Secret scanning (forbidden-names blocklist — local symlink, never committed)
+.gitleaks.toml
+
+# Claude Code local
+.claude/settings.local.json
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

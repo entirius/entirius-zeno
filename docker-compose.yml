@@ -1,0 +1,88 @@
+services:
+  # --- Infrastructure ---------------------------------------------------
+
+  db:
+    image: postgres:16-alpine
+    profiles: [infra]
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-entirius}
+      POSTGRES_USER: ${POSTGRES_USER:-entirius}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-entirius-dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-entirius}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zeno
+
+  redis:
+    image: redis:7-alpine
+    profiles: [infra]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zeno
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    profiles: [infra]
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - zeno
+
+  # --- Service under test -----------------------------------------------
+
+  service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        service: ${SERVICE:-entirius-service-volkanos}
+        branch: ${SERVICE_BRANCH:-master}
+    profiles: [service]
+    tty: true
+    ports:
+      - "${SERVICE_PORT:-8000}:8000"
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      ALLOWED_HOSTS: localhost,127.0.0.1,service
+      DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - zeno
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  zeno:
+    name: entirius-zeno
