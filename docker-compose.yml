@@ -5,7 +5,7 @@ services:
     image: postgres:16-alpine
     profiles: [infra]
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5532}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -24,7 +24,7 @@ services:
     image: redis:7-alpine
     profiles: [infra]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-6479}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -39,8 +39,8 @@ services:
     image: rabbitmq:3-management-alpine
     profiles: [infra]
     ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "${RABBITMQ_PORT:-5772}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15772}:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     environment:
@@ -66,7 +66,7 @@ services:
     profiles: [service]
     tty: true
     ports:
-      - "${SERVICE_PORT:-8000}:8000"
+      - "${SERVICE_PORT:-8100}:8000"
     environment:
       ENVIRONMENT: development
       DEBUG: "true"

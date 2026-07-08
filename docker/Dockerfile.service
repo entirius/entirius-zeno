@@ -4,20 +4,21 @@ FROM python:3.12-slim
 ARG service=entirius-service-volkanos
 ARG branch=master
 
-# Venv outside the project dir — dev mode bind-mounts repos/ over /entirius/services
-# and must not hide the installed environment.
+# Standard layout: venv lives in the project dir (.venv). In dev mode a named
+# volume shadows it, so the host clone's own venv is never touched.
 ENV SERVICE_DIR=/entirius/services/${service} \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    UV_PROJECT_ENVIRONMENT=/opt/venv \
-    VIRTUAL_ENV=/opt/venv \
-    PATH="/opt/venv/bin:${PATH}"
+    PATH="/entirius/services/${service}/.venv/bin:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 
 RUN git clone -b ${branch} --depth 1 https://github.com/entirius/${service}.git ${SERVICE_DIR}
+
+# Zeno owns the per-environment config of the service under test
+COPY docker/settings_local.py ${SERVICE_DIR}/main/settings_local.py
 
 WORKDIR ${SERVICE_DIR}
 

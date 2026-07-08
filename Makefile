@@ -57,7 +57,7 @@ health:  ## Verify infra healthchecks + service HTTP
 		s=$$(docker inspect --format='{{.State.Health.Status}}' $${COMPOSE_PROJECT_NAME:-entirius-zeno}-$$svc-1 2>/dev/null); \
 		if [ "$$s" = "healthy" ]; then echo "  $$svc: healthy"; else echo "  $$svc: $${s:-not running}"; fail=1; fi; \
 	done; \
-	code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:$${SERVICE_PORT:-8000}/api/schema/ 2>/dev/null); \
+	code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:$${SERVICE_PORT:-8100}/api/schema/ 2>/dev/null); \
 	if [ "$$code" -ge 200 ] && [ "$$code" -lt 400 ] 2>/dev/null; then echo "  service: HTTP $$code"; \
 	else echo "  service: FAIL (HTTP $$code)"; fail=1; fi; \
 	if [ $$fail -eq 0 ]; then echo "All services OK"; else echo "Some services unhealthy"; exit 1; fi

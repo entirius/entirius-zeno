@@ -18,12 +18,16 @@ No application code lives here — compose + Makefile + Dockerfile only.
 
 ## How it works
 
+- Entirius services REQUIRE a per-environment `main/settings_local.py` (fail-closed boot);
+  zeno's lives in `docker/settings_local.py` — baked into the image at build, copied into
+  the mounted clone on every dev-mode start. It reads compose env vars (`DATABASE_URL`, …).
 - `make up`: image built from GitHub (`SERVICE` / `SERVICE_BRANCH` in `.env`);
-  `uv sync --frozen` into `/opt/venv` (outside the project dir, so dev mounts don't hide it).
-- `make dev`: bind-mounts `repos/` over the image; the entrypoint re-syncs and
-  editable-installs every module repo found in `repos/py/` and `repos/django/`.
-- The service reads config from env (python-decouple) — compose passes `DATABASE_URL`
-  pointing at the `db` container; no settings files are copied around.
+  `uv sync --frozen` into the project-dir `.venv` (standard layout).
+- `make dev`: bind-mounts `repos/` over the image; a named volume shadows the service
+  `.venv` (host clone's venv untouched); the entrypoint re-syncs and editable-installs
+  every module repo found in `repos/py/` and `repos/django/`.
+- Host ports are shifted +100 from standard (postgres 5532, redis 6479, rabbitmq 5772,
+  service 8100) — developers run local instances on the standard ones.
 - `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`
   (`pwa/` arrives when frontend joins the stack).
 

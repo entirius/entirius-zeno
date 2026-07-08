@@ -7,6 +7,12 @@ services:
     command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
     volumes:
       - ./docker/entrypoint-dev.sh:/entirius/docker/entrypoint-dev.sh:ro
+      - ./docker/settings_local.py:/entirius/docker/settings_local.py:ro
       - ${SERVICES_PATH:-./repos/services}:/entirius/services
       - ${PY_PATH:-./repos/py}:/entirius/py
       - ${DJANGO_PATH:-./repos/django}:/entirius/django
+      # shadows the host clone's .venv — the container keeps its own env in the project dir
+      - service_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+
+volumes:
+  service_venv:

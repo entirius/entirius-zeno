@@ -26,7 +26,19 @@ make health    # verify all services respond
 make test      # run the service test suite against postgres
 ```
 
-Service is now at http://localhost:8000/ (Swagger UI: `/api/schema/swagger-ui/`).
+Service is now at http://localhost:8100/ (Swagger UI: `/api/schema/swagger-ui/`).
+
+Host ports are shifted +100 from the standard ones (postgres 5532, redis 6479,
+rabbitmq 5772, service 8100) — developers usually run local instances on the
+standard ports. Override in `.env` if needed.
+
+## Service configuration
+
+Entirius services require a per-environment `main/settings_local.py` and refuse
+to boot without one — zeno ships its own in `docker/settings_local.py`.
+It bridges compose env vars to Django settings: baked into the image at build,
+refreshed in the mounted clone on every dev-mode start.
+Change `.env` on the host instead of editing it.
 
 ## Two modes
 
@@ -56,6 +68,11 @@ On dev startup the entrypoint runs `uv pip install --no-deps -e` for every mount
 module repo, so Python imports your local code instead.
 Added a clone while containers run? `make link` re-links without a restart.
 
+**Venv:** the service venv lives in the project dir (`.venv`, standard layout).
+In dev mode a named volume shadows it, so the container never touches the venv
+of your host clone. The container also overwrites `main/settings_local.py`
+in the mounted clone with zeno's version — the clone under `repos/` belongs to zeno.
+
 ## Directory layout
 
 ```
@@ -65,7 +82,8 @@ entirius-zeno/
 ├── docker-compose.dev.yml   # dev mode: repos/ bind mounts
 ├── docker/
 │   ├── Dockerfile.service   # python:3.12-slim + uv
-│   └── entrypoint-dev.sh    # dev mode: sync + link local repos
+│   ├── entrypoint-dev.sh    # dev mode: settings_local + sync + link local repos
+│   └── settings_local.py    # zeno's per-environment config for the service
 ├── .env.example
 └── repos/                   # local clones (gitignored)
     ├── py/                  # entirius-py-* modules
@@ -99,11 +117,10 @@ entirius-zeno/
 |----------|---------|---------|
 | `SERVICE` | `entirius-service-volkanos` | Service repo to build and run |
 | `SERVICE_BRANCH` | `master` | Branch baked into the image |
-| `SERVICE_PORT` | `8000` | Host port for the service |
-| `POSTGRES_*`, `REDIS_PORT`, `RABBITMQ_*` | dev defaults | Infrastructure credentials and ports |
+| `SERVICE_PORT` | `8100` | Host port for the service |
+| `POSTGRES_*`, `REDIS_PORT`, `RABBITMQ_*` | dev defaults, ports +100 | Infrastructure credentials and host ports |
 
-The service reads its configuration from environment variables —
-compose passes `DATABASE_URL` pointing at the `db` container, so the whole stack
+Compose passes `DATABASE_URL` pointing at the `db` container, so the whole stack
 (including the test suite) runs against PostgreSQL.
 
 ## Dev credentials
