@@ -27,6 +27,8 @@ make test      # run the service test suite against postgres
 ```
 
 Service is now at http://localhost:8100/ (Swagger UI: `/api/schema/swagger-ui/`).
+Every `make up` / `make dev` ends with a summary of running services and their
+ports (read from the live containers); `make urls` prints it any time.
 
 Host ports are shifted +100 from the standard ones (postgres 5532, redis 6479,
 rabbitmq 5772, service 8100) — developers usually run local instances on the
@@ -106,6 +108,7 @@ entirius-zeno/
 | `make logs` | Tail logs |
 | `make status` | Container status |
 | `make shell` | Bash into the service container |
+| `make urls` | URLs and ports of running services (also printed after `up`/`dev`) |
 | `make health` | Verify all services respond |
 | `make migrate` | Apply service migrations |
 | `make test` | Migration drift check + service test suite |

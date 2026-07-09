@@ -1,4 +1,4 @@
-.PHONY: help init clone build up up-infra dev link down logs status shell health migrate test check clean
+.PHONY: help init clone build up up-infra dev link down logs status shell health urls migrate test check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -25,12 +25,15 @@ build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
 
 up:  ## Start infra + service (code baked into the image)
 	$(COMPOSE) $(PROFILES) up -d
+	@$(MAKE) --no-print-directory urls
 
 up-infra:  ## Start infra only (postgres, redis, rabbitmq)
 	$(COMPOSE) --profile infra up -d
+	@$(MAKE) --no-print-directory urls
 
 dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 	$(COMPOSE_DEV) $(PROFILES) up -d
+	@$(MAKE) --no-print-directory urls
 
 link:  ## Re-link mounted module repos without restarting (dev mode)
 	$(COMPOSE) exec service sh -c '\
@@ -50,6 +53,21 @@ status:  ## Container status
 
 shell:  ## Shell into the service container
 	$(COMPOSE) exec service bash
+
+# Ports read from the live containers (docker compose port), not from .env — never lies.
+urls:  ## URLs and ports of running services
+	@up=0; \
+	p=$$($(COMPOSE) port service 8000 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  service      http://localhost:$$p  (Swagger UI: /api/schema/swagger-ui/)"; up=1; }; \
+	p=$$($(COMPOSE) port db 5432 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  postgres     localhost:$$p  ($${POSTGRES_USER:-entirius}/$${POSTGRES_PASSWORD:-entirius-dev}, db: $${POSTGRES_DB:-entirius})"; up=1; }; \
+	p=$$($(COMPOSE) port redis 6379 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  redis        localhost:$$p"; up=1; }; \
+	p=$$($(COMPOSE) port rabbitmq 5672 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  rabbitmq     amqp://localhost:$$p"; up=1; }; \
+	p=$$($(COMPOSE) port rabbitmq 15672 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  rabbitmq-ui  http://localhost:$$p  ($${RABBITMQ_DEFAULT_USER:-guest}/$${RABBITMQ_DEFAULT_PASS:-guest})"; up=1; }; \
+	[ "$$up" = "1" ] || echo "  (nothing running — make up)"
 
 health:  ## Verify infra healthchecks + service HTTP
 	@fail=0; \
