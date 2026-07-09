@@ -58,12 +58,29 @@ make dev       # start with repos/ mounted
 make down      # stop
 ```
 
-To work on a module, clone it into the matching group directory:
+### Whole-platform workflow
+
+```bash
+make clone-repos   # clone EVERY entirius repo into its repos/ group;
+                   # modules the service depends on land at the uv.lock-pinned version tag
+make dev           # entrypoint links every module repo found in repos/py/ and repos/django/
+```
+
+Pinned clones sit on a detached HEAD — branch off in the module you develop:
+
+```bash
+cd repos/django/entirius-django-utils
+git switch -c feature/xyz
+# edit — Django reloads on save, the service now runs your module code
+```
+
+To work on a single module instead, clone just it into the matching group directory:
 
 ```bash
 git clone https://github.com/entirius/entirius-django-pim.git repos/django/entirius-django-pim
-make dev       # entrypoint links every module repo found in repos/py/ and repos/django/
 ```
+
+Modules cloned while containers run are picked up by `make link` (no restart needed).
 
 **Why linking?** The image installs locked versions from PyPI.
 On dev startup the entrypoint runs `uv pip install --no-deps -e` for every mounted
@@ -99,6 +116,7 @@ entirius-zeno/
 |---------|-------------|
 | `make init` | Create `.env` from template + `repos/` layout |
 | `make clone` | Clone the service under test into `repos/services/` |
+| `make clone-repos` | Clone all entirius repos into `repos/` groups (modules at service-locked versions) |
 | `make build` | Build the service image |
 | `make up` | Start infra + service (baked image) |
 | `make up-infra` | Start infrastructure only |

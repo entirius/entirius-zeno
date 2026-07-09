@@ -1,4 +1,4 @@
-.PHONY: help init clone build up up-infra dev link down logs status shell health urls migrate test check clean
+.PHONY: help init clone clone-repos build up up-infra dev link down logs status shell health urls migrate test check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -19,6 +19,9 @@ init:  ## Create .env from template + repos/ layout
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
 		git clone https://github.com/entirius/$(SERVICE).git repos/services/$(SERVICE)
+
+clone-repos:  ## Clone ALL entirius repos into repos/ groups; modules pinned to service uv.lock versions
+	@sh scripts/clone-repos.sh $(SERVICE)
 
 build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
 	$(COMPOSE) $(PROFILES) build

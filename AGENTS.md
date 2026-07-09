@@ -9,6 +9,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Command | Meaning |
 |---|---|
 | `make init` / `clone` | bootstrap `.env` + local clone of the service under test |
+| `make clone-repos` | clone all entirius repos into `repos/` groups, modules at uv.lock versions |
 | `make build` / `up` / `down` | build image, start/stop the stack |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
