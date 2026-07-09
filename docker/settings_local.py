@@ -19,4 +19,5 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", c
 DATABASES = {"default": dj_database_url.parse(config("DATABASE_URL"))}
 
 # Volkanos modules adopted in this environment (entirius-django-* app labels).
-LOCAL_APPS: list[str] = []
+# Order matters: regional before pim — FK targets first.
+LOCAL_APPS = ["django_regional", "django_utils", "django_pim"]
