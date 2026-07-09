@@ -11,7 +11,8 @@ ENV SERVICE_DIR=/entirius/services/${service} \
     PYTHONUNBUFFERED=1 \
     PATH="/entirius/services/${service}/.venv/bin:${PATH}"
 
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+# libmagic1: python-magic (pim file uploads); libgl1 + libglib2.0-0: opencv (pim video metadata)
+RUN apt-get update && apt-get install -y --no-install-recommends git libmagic1 libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 

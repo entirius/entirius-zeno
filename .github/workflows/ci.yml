@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [master, develop]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: compose config
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q
+      - name: shellcheck
+        run: docker run --rm -v "$PWD":/mnt koalaman/shellcheck:stable docker/entrypoint-dev.sh scripts/clone-repos.sh
+      - uses: astral-sh/setup-uv@v4
+      - name: ruff
+        run: uvx ruff check docker/
+
+  # E2E smoke of the harness itself: image builds, stack boots, service migrates and answers.
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - run: make init
+      - run: make build
+      - run: make up
+      - name: wait for health
+        run: |
+          for i in $(seq 1 24); do
+            make health && exit 0
+            sleep 10
+          done
+          docker compose logs service | tail -50
+          exit 1
+      - run: make migrate
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          V=v8.30.0  # keep equal to the module template's gitleaks rev
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/${V}/gitleaks_${V#v}_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks git --redact -v
