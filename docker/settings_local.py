@@ -19,5 +19,16 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", c
 DATABASES = {"default": dj_database_url.parse(config("DATABASE_URL"))}
 
 # Volkanos modules adopted in this environment (entirius-django-* app labels).
-# Order matters: regional before pim — FK targets first.
-LOCAL_APPS = ["django_regional", "django_utils", "django_pim"]
+# Order matters: FK targets first — regional/utils before pim, pim/pricemanager
+# before the pim satellites.
+LOCAL_APPS = [
+    "django_regional",
+    "django_utils",
+    "django_utils_translator",
+    "django_pim",
+    "django_pricemanager",
+    "django_pim_csv",
+    "django_pim_translator",
+    "django_pim_export_to_magento_api",
+    "django_pim_export_to_magento_package",
+]
