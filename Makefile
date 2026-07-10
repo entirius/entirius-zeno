@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos build up up-infra dev link down logs status shell health urls migrate test check clean
+.PHONY: help init clone clone-repos refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -22,6 +22,9 @@ clone:  ## Clone the service under test into repos/services/ (dev mode prerequis
 
 clone-repos:  ## Clone ALL entirius repos into repos/ groups; modules pinned to service uv.lock versions
 	@sh scripts/clone-repos.sh $(SERVICE)
+
+refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
+	@sh scripts/refresh-repos.sh $(SERVICE)
 
 build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
 	$(COMPOSE) $(PROFILES) build
@@ -91,6 +94,10 @@ migrate:  ## Apply service migrations
 test:  ## Migration drift check + service test suite (against postgres)
 	$(COMPOSE) exec service python manage.py makemigrations --check --dry-run
 	$(COMPOSE) exec service pytest -x -q -p no:cacheprovider
+
+smoke:  ## Boot proof: migrations, system check, admin + API over HTTP, session login
+	@$(MAKE) --no-print-directory health
+	@sh scripts/smoke.sh
 
 check:  ## Verify canonical .gitleaks.toml is linked
 	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
