@@ -20,7 +20,7 @@ DATABASES = {"default": dj_database_url.parse(config("DATABASE_URL"))}
 
 # Volkanos modules adopted in this environment (entirius-django-* app labels).
 # Order matters: FK targets first — regional/utils before pim, pim/pricemanager
-# before the pim satellites.
+# before the pim satellites; leaves last.
 LOCAL_APPS = [
     "django_regional",
     "django_utils",
@@ -31,4 +31,12 @@ LOCAL_APPS = [
     "django_pim_translator",
     "django_pim_export_to_magento_api",
     "django_pim_export_to_magento_package",
+    "django_vat_validator",
+    "django_faq",
+    "django_munin",
+    "django_captcha",
+    "django_agreements",
+    "django_deliverypoints",
+    "django_qms",
+    "django_email",
 ]
