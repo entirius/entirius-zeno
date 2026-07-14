@@ -23,6 +23,16 @@ REDIS_URL = config("REDIS_URL", default="redis://redis:6379")
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="amqp://guest:guest@rabbitmq:5672//")
 CELERY_RESULT_BACKEND = REDIS_URL + "/2"
 
+# django_matrix signal batching expects the django-redis client API on the default cache.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL + "/1",
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "KEY_PREFIX": "zeno",
+    }
+}
+
 # Volkanos modules adopted in this environment (entirius-django-* app labels).
 # Order matters: FK targets first — regional/utils before pim, pim/pricemanager
 # before the pim satellites; leaves last.
