@@ -27,6 +27,18 @@ make test      # run the service test suite against postgres
 ```
 
 Service is now at http://localhost:8100/ (Swagger UI: `/api/schema/swagger-ui/`).
+
+To make the stack end-to-end testable, seed it with the Emporium demo dataset and run the BDD suite:
+
+```bash
+make clone-tests   # clone entirius-test-package-emporium into repos/tests/
+make seed          # fixtures + full import pipeline (products, prices, stock, matrix)
+make bdd           # behave suite against the running service (make bdd TAGS=@matrix-v2)
+```
+
+A `worker` container (celery) runs alongside the service — the seed's stock import (QMS)
+executes as tasks. In dev mode the worker runs the baked image, not your mounted clones —
+restart it after module changes that affect tasks.
 Every `make up` / `make dev` ends with a summary of running services and their
 ports (read from the live containers); `make urls` prints it any time.
 
@@ -130,6 +142,9 @@ entirius-zeno/
 | `make health` | Verify all services respond |
 | `make migrate` | Apply service migrations |
 | `make test` | Migration drift check + service test suite |
+| `make clone-tests` | Clone the Emporium test package (data + BDD) into `repos/tests/` |
+| `make seed` | Seed the service with the Emporium test package (fixtures + import pipeline) |
+| `make bdd` | Run the BDD suite against the running service (`TAGS=@tag` optional) |
 | `make clean` | Remove containers and volumes |
 
 ## Configuration (.env)

@@ -72,8 +72,39 @@ services:
       DEBUG: "true"
       ALLOWED_HOSTS: localhost,127.0.0.1,service
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+    volumes:
+      # Emporium test package (make clone-tests) — seed scripts and QMS csv_path expect this path
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
     depends_on:
       db:
+        condition: service_healthy
+    networks:
+      - zeno
+
+  # Celery worker — required by `make seed` (QMS quantities import runs as tasks).
+  # Same image as the service; in dev mode it runs the BAKED code (no hot reload).
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        service: ${SERVICE:-entirius-service-volkanos}
+        branch: ${SERVICE_BRANCH:-master}
+    profiles: [service]
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist"]
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      ALLOWED_HOSTS: localhost,127.0.0.1,service
+      DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+    volumes:
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - zeno
