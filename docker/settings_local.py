@@ -18,6 +18,11 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", c
 # Compose passes DATABASE_URL pointing at the db container — no default, fail-closed.
 DATABASES = {"default": dj_database_url.parse(config("DATABASE_URL"))}
 
+# Celery — module workers (QMS quantities, PIM thumbnails); hostnames = compose services.
+REDIS_URL = config("REDIS_URL", default="redis://redis:6379")
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="amqp://guest:guest@rabbitmq:5672//")
+CELERY_RESULT_BACKEND = REDIS_URL + "/2"
+
 # Volkanos modules adopted in this environment (entirius-django-* app labels).
 # Order matters: FK targets first — regional/utils before pim, pim/pricemanager
 # before the pim satellites; leaves last.
