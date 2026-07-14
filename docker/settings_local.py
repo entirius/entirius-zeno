@@ -23,6 +23,10 @@ REDIS_URL = config("REDIS_URL", default="redis://redis:6379")
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="amqp://guest:guest@rabbitmq:5672//")
 CELERY_RESULT_BACKEND = REDIS_URL + "/2"
 
+# QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
+# without this the default (ZULU) runs the wrong chain and no catalog stock appears.
+QMS_TYPE = "XRAY"
+
 # django_matrix signal batching expects the django-redis client API on the default cache.
 CACHES = {
     "default": {
