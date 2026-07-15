@@ -23,6 +23,9 @@ REDIS_URL = config("REDIS_URL", default="redis://redis:6379")
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="amqp://guest:guest@rabbitmq:5672//")
 CELERY_RESULT_BACKEND = REDIS_URL + "/2"
 
+# Dev harness: browser frontends (storefront :3100, CMS :8180) call the API cross-origin.
+CORS_ALLOW_ALL_ORIGINS = True
+
 # Dev-only: allow the in-network `fixtures` host for supplier feed downloads
 # (the SSRF guard rightly blocks private hosts in production).
 SUPPLIER_BLOCK_PRIVATE_HOSTS = False
