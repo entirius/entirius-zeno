@@ -23,6 +23,10 @@ REDIS_URL = config("REDIS_URL", default="redis://redis:6379")
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="amqp://guest:guest@rabbitmq:5672//")
 CELERY_RESULT_BACKEND = REDIS_URL + "/2"
 
+# Dev-only: allow the in-network `fixtures` host for supplier feed downloads
+# (the SSRF guard rightly blocks private hosts in production).
+SUPPLIER_BLOCK_PRIVATE_HOSTS = False
+
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
 QMS_TYPE = "XRAY"
