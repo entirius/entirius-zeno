@@ -8,6 +8,9 @@ No application code lives in this repo.
 The service image is built straight from its GitHub repo,
 and in dev mode your local clones under `repos/` are mounted into the container.
 
+Task-oriented walkthrough (first run, testing, development, troubleshooting):
+[doc/howto-test.md](doc/howto-test.md).
+
 ## Requirements
 
 - Docker with Compose v2
