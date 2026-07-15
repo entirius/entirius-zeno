@@ -113,6 +113,7 @@ seed:  ## Seed the service with the Emporium test package (fixtures + full impor
 	DB_NAME=$${POSTGRES_DB:-entirius} \
 	bash $(TESTS_PATH)/$(TESTS_REPO)/scripts/seed.sh
 
+# -@spec-first: scenarios ahead of their module; -@blocked-by-module: known module gaps (registry)
 bdd:  ## Run the BDD suite against the running service (TAGS=@tag optional)
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) bdd TAGS=$(TAGS)

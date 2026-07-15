@@ -81,6 +81,17 @@ services:
     networks:
       - zeno
 
+  # Static HTTP for the test package (supplier feed downloads — the feed connector
+  # speaks HTTP only). In-network only: no host port.
+  fixtures:
+    image: python:3.12-slim
+    profiles: [service]
+    command: ["python", "-m", "http.server", "8000", "--directory", "/entirius/test-package"]
+    volumes:
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+    networks:
+      - zeno
+
   # Celery worker — required by `make seed` (QMS quantities import runs as tasks).
   # Same image as the service; in dev mode it runs the BAKED code (no hot reload).
   worker:
