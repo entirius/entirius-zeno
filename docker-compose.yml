@@ -92,6 +92,7 @@ services:
         repo: entirius-pwa-storefront-demo
         branch: ${PWA_BRANCH:-develop}
         ref: ${PWA_REF:-unknown}
+        api_base_url: http://service:8000/api
     profiles: [pwa]
     ports:
       - "${PWA_PORT:-3100}:3000"
@@ -103,7 +104,9 @@ services:
       NUXT_PUBLIC_API_BASE_URL: http://localhost:${SERVICE_PORT:-8100}/api
       NUXT_PUBLIC_API_BASE_V: "1"
       NUXT_PUBLIC_DEFAULT_CHANEL: ${PWA_CHANNEL:-default-europe}
-      NUXT_PUBLIC_STORE_ID: ${PWA_STORE_ID:-global}
+      # Empty STORE_ID = single-store mode (no multi-domain market gate; the demo
+      # serves one channel's catalog directly). "global" is for multi-domain deployments.
+      NUXT_PUBLIC_STORE_ID: ${PWA_STORE_ID:-}
       NUXT_PUBLIC_API_CHECKOUT_KEY: ${CHECKOUT_API_KEY:-entirius-docker-checkout-dev-key-2026}
       NUXT_PUBLIC_EXP_TIME: "300000"
       NUXT_PUBLIC_THEME_MODE: both
