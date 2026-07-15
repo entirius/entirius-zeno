@@ -18,6 +18,29 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", c
 # Compose passes DATABASE_URL pointing at the db container — no default, fail-closed.
 DATABASES = {"default": dj_database_url.parse(config("DATABASE_URL"))}
 
+# Celery — module workers (QMS quantities, PIM thumbnails); hostnames = compose services.
+REDIS_URL = config("REDIS_URL", default="redis://redis:6379")
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="amqp://guest:guest@rabbitmq:5672//")
+CELERY_RESULT_BACKEND = REDIS_URL + "/2"
+
+# Dev-only: allow the in-network `fixtures` host for supplier feed downloads
+# (the SSRF guard rightly blocks private hosts in production).
+SUPPLIER_BLOCK_PRIVATE_HOSTS = False
+
+# QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
+# without this the default (ZULU) runs the wrong chain and no catalog stock appears.
+QMS_TYPE = "XRAY"
+
+# django_matrix signal batching expects the django-redis client API on the default cache.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL + "/1",
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "KEY_PREFIX": "zeno",
+    }
+}
+
 # Volkanos modules adopted in this environment (entirius-django-* app labels).
 # Order matters: FK targets first — regional/utils before pim, pim/pricemanager
 # before the pim satellites; leaves last.

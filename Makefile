@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke check clean
+.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -8,13 +8,15 @@ COMPOSE = docker compose
 COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROFILES = --profile infra --profile service
 SERVICE ?= entirius-service-volkanos
+TESTS_PATH ?= ./repos/tests
+TESTS_REPO = entirius-test-package-emporium
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*##' $(firstword $(MAKEFILE_LIST)) | awk -F':.*##' '{printf "  %-12s %s\n", $$1, $$2}'
 
 init:  ## Create .env from template + repos/ layout
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
-	@mkdir -p repos/py repos/django repos/services
+	@mkdir -p repos/py repos/django repos/services repos/tests
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
@@ -22,6 +24,10 @@ clone:  ## Clone the service under test into repos/services/ (dev mode prerequis
 
 clone-repos:  ## Clone ALL entirius repos into repos/ groups; modules pinned to service uv.lock versions
 	@sh scripts/clone-repos.sh $(SERVICE)
+
+clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
+	@test -d $(TESTS_PATH)/$(TESTS_REPO)/.git || \
+		git clone https://github.com/entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
 
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
@@ -98,6 +104,19 @@ test:  ## Migration drift check + service test suite (against postgres)
 smoke:  ## Boot proof: migrations, system check, admin + API over HTTP, session login
 	@$(MAKE) --no-print-directory health
 	@sh scripts/smoke.sh
+
+seed:  ## Seed the service with the Emporium test package (fixtures + full import pipeline)
+	@CONTAINER=$$($(COMPOSE) ps -q service) \
+	DB_CONTAINER=$$($(COMPOSE) ps -q db) \
+	SVC_DIR=/entirius/services/$(SERVICE) \
+	DB_USER=$${POSTGRES_USER:-entirius} \
+	DB_NAME=$${POSTGRES_DB:-entirius} \
+	bash $(TESTS_PATH)/$(TESTS_REPO)/scripts/seed.sh
+
+# -@spec-first: scenarios ahead of their module; -@blocked-by-module: known module gaps (registry)
+bdd:  ## Run the BDD suite against the running service (TAGS=@tag optional)
+	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
+	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) bdd TAGS=$(TAGS)
 
 check:  ## Verify canonical .gitleaks.toml is linked
 	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }

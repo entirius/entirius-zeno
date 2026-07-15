@@ -13,6 +13,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make build` / `up` / `down` | build image, start/stop the stack |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
+| `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make urls` | ports/URLs of running services from live containers (auto after `up`/`dev`) |
 | `make shell` / `logs` / `status` | debugging |
 | `make check` | guard: canonical `.gitleaks.toml` symlink present |
