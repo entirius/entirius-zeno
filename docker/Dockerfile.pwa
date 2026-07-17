@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+# Storefront PWA (Nuxt 3) — built from GitHub, config via runtime env (nuxt runtimeConfig).
+FROM node:22-slim
+
+ARG repo=entirius-pwa-storefront-demo
+ARG branch=develop
+
+ENV APP_DIR=/entirius/pwa/${repo} \
+    NUXT_TELEMETRY_DISABLED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Cache-bust: `ref` carries the remote branch SHA (resolved by the Makefile via
+# git ls-remote) — an ADD of the GitHub API ref proved unreliable (silent cache reuse).
+ARG ref=unknown
+RUN echo "building ${repo}@${branch} (${ref})" \
+    && git clone -b ${branch} --depth 1 https://github.com/entirius/${repo}.git ${APP_DIR}
+
+WORKDIR ${APP_DIR}
+
+# Baked at build: nitro routeRules (the /media/** proxy) read env only at build time.
+ARG api_base_url=http://localhost:8000/api
+ENV API_BASE_URL=${api_base_url}
+
+RUN npm ci && npm run build
+
+EXPOSE 3000
+CMD ["node", ".output/server/index.mjs"]

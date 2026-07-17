@@ -28,6 +28,15 @@ jobs:
       - run: make init
       - run: make build
       - run: make up
+      # Migrate before health: /api/schema/ enumerates DB-backed routers, so it needs
+      # the schema present. Wait for the DB container, not the service HTTP.
+      - name: wait for db + migrate
+        run: |
+          for i in $(seq 1 24); do
+            docker compose exec -T db pg_isready -U entirius && break
+            sleep 5
+          done
+          make migrate
       - name: wait for health
         run: |
           for i in $(seq 1 24); do
@@ -36,7 +45,6 @@ jobs:
           done
           docker compose logs service | tail -50
           exit 1
-      - run: make migrate
 
   secret-scan:
     runs-on: ubuntu-latest

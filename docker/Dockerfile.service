@@ -16,10 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends git libmagic1 l
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 
-# Cache-bust: this ref file changes whenever the branch HEAD moves, so the clone layer
-# rebuilds exactly then — without it `make build` silently reuses a stale clone.
-ADD https://api.github.com/repos/entirius/${service}/git/refs/heads/${branch} /tmp/git-ref.json
-RUN git clone -b ${branch} --depth 1 https://github.com/entirius/${service}.git ${SERVICE_DIR}
+# Cache-bust: `ref` carries the remote branch SHA (resolved by the Makefile via
+# git ls-remote) — an ADD of the GitHub API ref proved unreliable (silent cache reuse).
+ARG ref=unknown
+RUN echo "building ${service}@${branch} (${ref})" \
+    && git clone -b ${branch} --depth 1 https://github.com/entirius/${service}.git ${SERVICE_DIR}
 
 # Zeno owns the per-environment config of the service under test
 COPY docker/settings_local.py ${SERVICE_DIR}/main/settings_local.py

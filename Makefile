@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd check clean
+.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd pwa cms frontends check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -32,8 +32,11 @@ clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
 
+# Remote branch SHAs — passed as build args so the clone layer cache busts exactly on HEAD change.
+REF = $$(git ls-remote https://github.com/entirius/$(1).git refs/heads/$(2) | cut -f1)
+
 build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
-	$(COMPOSE) $(PROFILES) build
+	SERVICE_REF=$(call REF,$(SERVICE),$${SERVICE_BRANCH:-master}) $(COMPOSE) $(PROFILES) build
 
 up:  ## Start infra + service (code baked into the image)
 	$(COMPOSE) $(PROFILES) up -d
@@ -71,6 +74,10 @@ urls:  ## URLs and ports of running services
 	@up=0; \
 	p=$$($(COMPOSE) port service 8000 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  service      http://localhost:$$p  (Swagger UI: /api/schema/swagger-ui/)"; up=1; }; \
+	p=$$($(COMPOSE) --profile pwa port pwa 3000 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  storefront   http://localhost:$$p"; up=1; }; \
+	p=$$($(COMPOSE) --profile cms port cms 8080 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  cms          http://localhost:$$p  (admin / admin123)"; up=1; }; \
 	p=$$($(COMPOSE) port db 5432 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  postgres     localhost:$$p  ($${POSTGRES_USER:-entirius}/$${POSTGRES_PASSWORD:-entirius-dev}, db: $${POSTGRES_DB:-entirius})"; up=1; }; \
 	p=$$($(COMPOSE) port redis 6379 2>/dev/null | cut -d: -f2); \
@@ -104,6 +111,16 @@ test:  ## Migration drift check + service test suite (against postgres)
 smoke:  ## Boot proof: migrations, system check, admin + API over HTTP, session login
 	@$(MAKE) --no-print-directory health
 	@sh scripts/smoke.sh
+
+pwa:  ## Start the demo storefront (build from GitHub on first run)
+	PWA_REF=$(call REF,entirius-pwa-storefront-demo,$${PWA_BRANCH:-develop}) $(COMPOSE) $(PROFILES) --profile pwa up -d --build pwa
+	@$(MAKE) --no-print-directory urls
+
+cms:  ## Start the admin CMS (build from GitHub on first run)
+	CMS_REF=$(call REF,entirius-pwa-cms,$${CMS_BRANCH:-develop}) $(COMPOSE) $(PROFILES) --profile cms up -d --build cms
+	@$(MAKE) --no-print-directory urls
+
+frontends: pwa cms  ## Start both frontends
 
 seed:  ## Seed the service with the Emporium test package (fixtures + full import pipeline)
 	@CONTAINER=$$($(COMPOSE) ps -q service) \
