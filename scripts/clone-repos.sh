@@ -5,6 +5,9 @@
 # (detached HEAD — branch off in the module to develop it); everything else stays
 # on the default branch. Existing clones are left untouched.
 #
+# CLONE_REF=develop → check out `develop` for every repo instead of the locked tag
+# (integration mode: picks up unreleased module fixes). Groups: py/ django/ services/ pwa/.
+#
 # Requires: gh (authenticated), git.
 #
 set -e
@@ -32,6 +35,7 @@ gh repo list entirius --limit 200 --no-archived --json name -q '.[].name' | sort
         entirius-py-*)      group=py ;;
         entirius-django-*)  group=django ;;
         entirius-service-*) group=services ;;
+        entirius-pwa-*)     group=pwa ;;
         *)  echo "  skip:  ${name} (no repos/ group)"; continue ;;
     esac
     dir="repos/${group}/${name}"
@@ -42,6 +46,10 @@ gh repo list entirius --limit 200 --no-archived --json name -q '.[].name' | sort
     mkdir -p "repos/${group}"
     if ! git clone --quiet "https://github.com/entirius/${name}.git" "$dir"; then
         echo "  FAIL:  ${name}"
+        continue
+    fi
+    if [ -n "$CLONE_REF" ] && git -C "$dir" checkout --quiet "$CLONE_REF" 2>/dev/null; then
+        echo "  clone: ${name} @ ${CLONE_REF}"
         continue
     fi
     version=$(locked_version "$name")
