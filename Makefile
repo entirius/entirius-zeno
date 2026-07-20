@@ -48,6 +48,7 @@ up-infra:  ## Start infra only (postgres, redis, rabbitmq)
 
 dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 	$(COMPOSE_DEV) $(PROFILES) up -d
+	@python3 scripts/dashboard.py 2>/dev/null || true
 	@$(MAKE) --no-print-directory urls
 
 link:  ## Re-link mounted module repos without restarting (dev mode)
@@ -74,6 +75,8 @@ urls:  ## URLs and ports of running services
 	@up=0; \
 	p=$$($(COMPOSE) port service 8000 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  service      http://localhost:$$p  (Swagger UI: /api/schema/swagger-ui/)"; up=1; }; \
+	p=$$($(COMPOSE) port dashboard 8080 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  zeno suite   http://localhost:$$p  (dashboard)"; up=1; }; \
 	p=$$($(COMPOSE) --profile pwa port pwa 3000 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  storefront   http://localhost:$$p"; up=1; }; \
 	p=$$($(COMPOSE) --profile cms port cms 8080 2>/dev/null | cut -d: -f2); \
@@ -121,6 +124,9 @@ cms:  ## Start the admin CMS (build from GitHub on first run)
 	@$(MAKE) --no-print-directory urls
 
 frontends: pwa cms  ## Start both frontends
+
+dashboard:  ## Regenerate the Zeno Suite dashboard from the live stack
+	@python3 scripts/dashboard.py
 
 seed:  ## Seed the service with the Emporium test package (fixtures + full import pipeline)
 	@CONTAINER=$$($(COMPOSE) ps -q service) \

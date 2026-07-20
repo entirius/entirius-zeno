@@ -145,6 +145,7 @@ entirius-zeno/
 | `make health` | Verify all services respond |
 | `make migrate` | Apply service migrations |
 | `make test` | Migration drift check + service test suite |
+| `make dashboard` | Regenerate the Zeno Suite dashboard (live stack: ports, editable vs baked packages) |
 | `make clone-tests` | Clone the Emporium test package (data + BDD) into `repos/tests/` |
 | `make seed` | Seed the service with the Emporium test package (fixtures + import pipeline) |
 | `make bdd` | Run the BDD suite against the running service (`TAGS=@tag` optional) |

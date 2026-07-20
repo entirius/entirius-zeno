@@ -133,6 +133,19 @@ services:
     networks:
       - zeno
 
+  # Zeno Suite — a generated dashboard (make dashboard) of the live stack: real ports,
+  # which volkanos packages are editable from repos/ vs baked, test packages present.
+  dashboard:
+    image: python:3.12-slim
+    profiles: [service]
+    command: ["python", "-m", "http.server", "8080", "--directory", "/srv"]
+    ports:
+      - "${DASHBOARD_PORT:-8200}:8080"
+    volumes:
+      - ./docker/dashboard:/srv:ro
+    networks:
+      - zeno
+
   # Static HTTP for the test package (supplier feed downloads — the feed connector
   # speaks HTTP only). In-network only: no host port.
   fixtures:

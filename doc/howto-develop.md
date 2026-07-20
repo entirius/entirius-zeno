@@ -32,6 +32,7 @@ Added a clone while containers run? `make link` re-links without a restart.
 | `make smoke` | 30-second boot proof: migrations, system check, HTTP, admin login |
 | `make test` | service unit tests + migration drift check — **against postgres**, like CI |
 | `make bdd TAGS=@your-area` | black-box API behavior on seeded data |
+| `make dashboard` | regenerate the Zeno Suite dashboard (live ports, which packages are editable from repos/) |
 
 Typical loop: edit → save (auto-reload) → `make bdd TAGS=@pim-admin` → before pushing,
 the canonical `make seed && make bdd`.
