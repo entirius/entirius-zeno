@@ -43,3 +43,11 @@ No application code lives here — compose + Makefile + Dockerfile only.
 - `.gitleaks.toml` is a local symlink to the canonical config (never committed);
   `make check` guards it.
 - Default: do not commit — git is the user's call.
+
+## Commit Message Format
+
+**NEVER add `Co-Authored-By: Claude ...` (or any other Claude/Anthropic attribution) to commit messages.**
+
+This overrides the default Claude Code behavior of appending a `Co-Authored-By` trailer. Commit messages MUST contain only the user's authored content — no robot footer, no "Generated with Claude Code" line, no co-author trailer.
+
+Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
