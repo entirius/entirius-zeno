@@ -27,7 +27,7 @@ locked_version() {
 
 # Service first — module pinning below reads its uv.lock
 if [ ! -d "repos/services/${SERVICE}/.git" ]; then
-    git clone --quiet "https://github.com/entirius/${SERVICE}.git" "repos/services/${SERVICE}"
+    git clone --quiet "git@github.com:entirius/${SERVICE}.git" "repos/services/${SERVICE}"
     echo "  clone: ${SERVICE} (service under test)"
 fi
 
@@ -46,7 +46,7 @@ gh repo list entirius --limit 200 --no-archived --json name -q '.[].name' | sort
         continue
     fi
     mkdir -p "repos/${group}"
-    if ! git clone --quiet "https://github.com/entirius/${name}.git" "$dir"; then
+    if ! git clone --quiet "git@github.com:entirius/${name}.git" "$dir"; then
         echo "  FAIL:  ${name}"
         continue
     fi
