@@ -1,14 +1,17 @@
 # syntax=docker/dockerfile:1
-# Storefront PWA (Nuxt 3) — built from GitHub, config via runtime env (nuxt runtimeConfig).
+# Storefront (Next.js 16 App Router, pnpm) — built from GitHub. The app reads no env:
+# its whole config is the gitignored _CONFIG/ directory of JSON files, imported
+# statically and therefore baked into the build. zeno writes them here.
 FROM node:22-slim
 
-ARG repo=entirius-pwa-storefront-demo
+ARG repo=entirius-pwa-storefront
 ARG branch=develop
 
 ENV APP_DIR=/entirius/pwa/${repo} \
-    NUXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Cache-bust: `ref` carries the remote branch SHA (resolved by the Makefile via
@@ -19,11 +22,27 @@ RUN echo "building ${repo}@${branch} (${ref})" \
 
 WORKDIR ${APP_DIR}
 
-# Baked at build: nitro routeRules (the /media/** proxy) read env only at build time.
-ARG api_base_url=http://localhost:8000/api
+# _CONFIG/ from the committed template, then zeno's values written in: the API URL
+# and one channel (the same one the CMS edits), which also becomes the default of
+# the `default` country — routing lives under app/[customer_country].
+ARG api_base_url=http://localhost:8100
+ARG channel=default-europe
+ARG checkout_key=entirius-docker-checkout-dev-key-2026
 ENV API_BASE_URL=${api_base_url}
+RUN cp -r _CONFIG.example _CONFIG && node -e "\
+const fs = require('fs'); \
+const rw = (f, fn) => { const p = '_CONFIG/' + f; \
+  fs.writeFileSync(p, JSON.stringify(fn(JSON.parse(fs.readFileSync(p))), null, 2)); }; \
+rw('app.config.json', c => ({ ...c, API_BASE_URL: '${api_base_url}' })); \
+rw('channels.config.json', () => ({ '${channel}': \
+  { CHANNEL_LABEL: '${channel}', API_CHECKOUT_KEY: '${checkout_key}' } })); \
+rw('countries.config.json', c => ({ default: \
+  { ...c.default, channels: ['${channel}'], default_channel: '${channel}' } })); \
+"
 
-RUN npm ci && npm run build
+RUN corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build
 
 EXPOSE 3000
-CMD ["node", ".output/server/index.mjs"]
+# API_BASE_URL is the host URL (the browser has to reach it too), so inside the
+# container that same port must lead to the service — forward it before starting.
+CMD ["sh", "-c", "socat TCP-LISTEN:${API_BASE_URL##*:},fork,reuseaddr TCP:service:8000 & exec pnpm start -H 0.0.0.0 -p 3000"]

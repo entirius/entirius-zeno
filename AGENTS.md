@@ -14,7 +14,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
-| `make urls` | ports/URLs of running services from live containers (auto after `up`/`dev`) |
+| `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
+| `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
 | `make check` | guard: canonical `.gitleaks.toml` symlink present |
 | `make clean` | remove containers and volumes |
@@ -31,8 +32,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
   every module repo found in `repos/py/` and `repos/django/`.
 - Host ports are shifted +100 from standard (postgres 5532, redis 6479, rabbitmq 5772,
   service 8100) — developers run local instances on the standard ones.
-- `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`
-  (`pwa/` arrives when frontend joins the stack).
+- `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`, `pwa/`
+  (storefront + CMS). Frontend containers build from GitHub, not from `repos/pwa/`.
 
 ## Conventions
 

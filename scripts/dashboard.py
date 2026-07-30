@@ -15,7 +15,7 @@ COMPOSE = ["docker", "compose"]
 # (compose service, container port, label, path suffix for the browser link)
 SERVICES = [
     ("service", 8000, "Volkanos API", "/api/schema/swagger-ui/"),
-    ("pwa", 3000, "Storefront (demo)", "/"),
+    ("pwa", 3000, "Storefront", "/"),
     ("cms", 8080, "Admin CMS", "/"),
     ("rabbitmq", 15672, "RabbitMQ", "/"),
 ]

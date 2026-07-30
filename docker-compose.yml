@@ -82,34 +82,27 @@ services:
     networks:
       - zeno
 
-  # --- Frontends (demo storefront + admin CMS) ---------------------------
+  # --- Frontends (storefront + admin CMS) --------------------------------
 
+  # No environment block: the storefront is configured only by _CONFIG/*.json,
+  # imported statically and therefore baked in at image build (see Dockerfile.pwa).
   pwa:
     build:
       context: .
       dockerfile: docker/Dockerfile.pwa
       args:
-        repo: entirius-pwa-storefront-demo
+        repo: entirius-pwa-storefront
         branch: ${PWA_BRANCH:-develop}
         ref: ${PWA_REF:-unknown}
-        api_base_url: http://service:8000/api
+        # One URL serves both callers (server components in the container, browser
+        # on the host), so it has to be the host one — the container forwards that
+        # port to the service (Dockerfile.pwa CMD).
+        api_base_url: http://localhost:${SERVICE_PORT:-8100}
+        channel: ${PWA_CHANNEL:-default-europe}
+        checkout_key: ${CHECKOUT_API_KEY:-entirius-docker-checkout-dev-key-2026}
     profiles: [pwa]
     ports:
       - "${PWA_PORT:-3100}:3000"
-    environment:
-      # Nuxt 3 runtime overrides use the NUXT_ / NUXT_PUBLIC_ prefixes (plain names
-      # are only read at build time). Server-side calls go container-to-container;
-      # the browser hits the host port.
-      NUXT_API_BASE_URL: http://service:8000/api
-      NUXT_PUBLIC_API_BASE_URL: http://localhost:${SERVICE_PORT:-8100}/api
-      NUXT_PUBLIC_API_BASE_V: "1"
-      NUXT_PUBLIC_DEFAULT_CHANEL: ${PWA_CHANNEL:-default-europe}
-      # Empty STORE_ID = single-store mode (no multi-domain market gate; the demo
-      # serves one channel's catalog directly). "global" is for multi-domain deployments.
-      NUXT_PUBLIC_STORE_ID: ${PWA_STORE_ID:-}
-      NUXT_PUBLIC_API_CHECKOUT_KEY: ${CHECKOUT_API_KEY:-entirius-docker-checkout-dev-key-2026}
-      NUXT_PUBLIC_EXP_TIME: "300000"
-      NUXT_PUBLIC_THEME_MODE: both
     networks:
       - zeno
 
