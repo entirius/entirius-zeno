@@ -83,7 +83,6 @@ LOCAL_APPS = [
     "django_returns",
     "django_omnibus",
     "django_crm",
-    "django_loyalty",
 ]
 
 # Voucher-flow secrets (zeno dev-only values).
