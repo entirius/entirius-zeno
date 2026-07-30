@@ -32,11 +32,17 @@ clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
 
-# Remote branch SHAs — passed as build args so the clone layer cache busts exactly on HEAD change.
-REF = $$(git ls-remote https://github.com/entirius/$(1).git refs/heads/$(2) | cut -f1)
+# Resolves the remote branch SHA into $$ref — passed as a build arg so the clone layer
+# cache busts exactly on HEAD change. Empty means repo or branch does not exist: fail
+# here instead of misleadingly deep inside `git clone` in the Dockerfile.
+define REF
+ref=$$(GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/entirius/$(1).git refs/heads/$(2) 2>/dev/null | cut -f1); \
+[ -n "$$ref" ] || { echo "cannot resolve entirius/$(1)@$(2) - missing repo, branch, or not public?"; exit 1; }
+endef
 
 build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
-	SERVICE_REF=$(call REF,$(SERVICE),$${SERVICE_BRANCH:-master}) $(COMPOSE) $(PROFILES) build
+	@$(call REF,$(SERVICE),$${SERVICE_BRANCH:-master}); \
+	SERVICE_REF=$$ref $(COMPOSE) $(PROFILES) build
 
 up:  ## Start infra + service (code baked into the image)
 	$(COMPOSE) $(PROFILES) up -d
@@ -48,6 +54,7 @@ up-infra:  ## Start infra only (postgres, redis, rabbitmq)
 
 dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 	$(COMPOSE_DEV) $(PROFILES) up -d
+	@python3 scripts/dashboard.py 2>/dev/null || true
 	@$(MAKE) --no-print-directory urls
 
 link:  ## Re-link mounted module repos without restarting (dev mode)
@@ -74,6 +81,8 @@ urls:  ## URLs and ports of running services
 	@up=0; \
 	p=$$($(COMPOSE) port service 8000 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  service      http://localhost:$$p  (Swagger UI: /api/schema/swagger-ui/)"; up=1; }; \
+	p=$$($(COMPOSE) port dashboard 8080 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  zeno suite   http://localhost:$$p  (dashboard)"; up=1; }; \
 	p=$$($(COMPOSE) --profile pwa port pwa 3000 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  storefront   http://localhost:$$p"; up=1; }; \
 	p=$$($(COMPOSE) --profile cms port cms 8080 2>/dev/null | cut -d: -f2); \
@@ -112,15 +121,20 @@ smoke:  ## Boot proof: migrations, system check, admin + API over HTTP, session 
 	@$(MAKE) --no-print-directory health
 	@sh scripts/smoke.sh
 
-pwa:  ## Start the demo storefront (build from GitHub on first run)
-	PWA_REF=$(call REF,entirius-pwa-storefront-demo,$${PWA_BRANCH:-develop}) $(COMPOSE) $(PROFILES) --profile pwa up -d --build pwa
+pwa:  ## Start the storefront (build from GitHub on first run)
+	@$(call REF,entirius-pwa-storefront,$${PWA_BRANCH:-develop}); \
+	PWA_REF=$$ref $(COMPOSE) $(PROFILES) --profile pwa up -d --build pwa
 	@$(MAKE) --no-print-directory urls
 
 cms:  ## Start the admin CMS (build from GitHub on first run)
-	CMS_REF=$(call REF,entirius-pwa-cms,$${CMS_BRANCH:-develop}) $(COMPOSE) $(PROFILES) --profile cms up -d --build cms
+	@$(call REF,entirius-pwa-cms,$${CMS_BRANCH:-develop}); \
+	CMS_REF=$$ref $(COMPOSE) $(PROFILES) --profile cms up -d --build cms
 	@$(MAKE) --no-print-directory urls
 
 frontends: pwa cms  ## Start both frontends
+
+dashboard:  ## Regenerate the Zeno Suite dashboard from the live stack
+	@python3 scripts/dashboard.py
 
 seed:  ## Seed the service with the Emporium test package (fixtures + full import pipeline)
 	@CONTAINER=$$($(COMPOSE) ps -q service) \

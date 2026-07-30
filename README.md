@@ -107,6 +107,19 @@ In dev mode a named volume shadows it, so the container never touches the venv
 of your host clone. The container also overwrites `main/settings_local.py`
 in the mounted clone with zeno's version — the clone under `repos/` belongs to zeno.
 
+## Frontends
+
+```bash
+make frontends   # storefront http://localhost:3100 · admin CMS http://localhost:8180
+```
+
+Both are built straight from their GitHub repos (`entirius-pwa-storefront`,
+`entirius-pwa-cms`) — clones under `repos/pwa/` are for reading code, not for running it.
+They serve `PWA_CHANNEL` (the storefront sells it, the CMS edits it) and talk to the
+service on `SERVICE_PORT`. The storefront takes no runtime configuration: its `_CONFIG/`
+JSON is written from `.env` values at image build, so a changed port or channel needs
+`make pwa` again.
+
 ## Directory layout
 
 ```
@@ -116,13 +129,17 @@ entirius-zeno/
 ├── docker-compose.dev.yml   # dev mode: repos/ bind mounts
 ├── docker/
 │   ├── Dockerfile.service   # python:3.12-slim + uv
+│   ├── Dockerfile.pwa       # storefront (Next.js + pnpm)
+│   ├── Dockerfile.cms       # admin CMS (Vue CLI)
 │   ├── entrypoint-dev.sh    # dev mode: settings_local + sync + link local repos
 │   └── settings_local.py    # zeno's per-environment config for the service
+├── scripts/                 # repo cloning, smoke test, dashboard generator
 ├── .env.example
 └── repos/                   # local clones (gitignored)
     ├── py/                  # entirius-py-* modules
     ├── django/              # entirius-django-* modules
-    └── services/            # entirius-service-* services
+    ├── services/            # entirius-service-* services
+    └── pwa/                 # entirius-pwa-* frontends
 ```
 
 ## Commands
@@ -145,6 +162,10 @@ entirius-zeno/
 | `make health` | Verify all services respond |
 | `make migrate` | Apply service migrations |
 | `make test` | Migration drift check + service test suite |
+| `make dashboard` | Regenerate the Zeno Suite dashboard (live stack: ports, editable vs baked packages) |
+| `make pwa` | Start the storefront (built from GitHub on first run) |
+| `make cms` | Start the admin CMS (built from GitHub on first run) |
+| `make frontends` | Start both frontends |
 | `make clone-tests` | Clone the Emporium test package (data + BDD) into `repos/tests/` |
 | `make seed` | Seed the service with the Emporium test package (fixtures + import pipeline) |
 | `make bdd` | Run the BDD suite against the running service (`TAGS=@tag` optional) |
@@ -158,6 +179,8 @@ entirius-zeno/
 | `SERVICE_BRANCH` | `master` | Branch baked into the image |
 | `SERVICE_PORT` | `8100` | Host port for the service |
 | `POSTGRES_*`, `REDIS_PORT`, `RABBITMQ_*` | dev defaults, ports +100 | Infrastructure credentials and host ports |
+| `PWA_PORT` / `CMS_PORT` / `DASHBOARD_PORT` | `3100` / `8180` / `8200` | Host ports for storefront, CMS, Zeno Suite |
+| `PWA_CHANNEL` | `default-europe` | Channel the storefront serves and the CMS edits (Emporium seeds it) |
 
 Compose passes `DATABASE_URL` pointing at the `db` container, so the whole stack
 (including the test suite) runs against PostgreSQL.

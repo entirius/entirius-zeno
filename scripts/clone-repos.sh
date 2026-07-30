@@ -1,9 +1,14 @@
 #!/bin/sh
 #
 # Clones every entirius org repo into its repos/ group dir (py/, django/, services/).
-# Modules pinned in the service uv.lock are checked out at the locked version tag
-# (detached HEAD — branch off in the module to develop it); everything else stays
-# on the default branch. Existing clones are left untouched.
+# Default: every repo on `master` (latest stable). Existing clones are left untouched.
+# Groups: py/ django/ services/ pwa/.
+#
+# CLONE_REF override (per run):
+#   CLONE_REF=develop → integration mode: latest unreleased code (picks up module fixes)
+#   CLONE_REF=lock    → reproducible: modules at the service uv.lock version tags
+#   CLONE_REF=<ref>   → any branch/tag for every repo
+# A developer can always `git switch` an individual module afterwards.
 #
 # Requires: gh (authenticated), git.
 #
@@ -32,6 +37,7 @@ gh repo list entirius --limit 200 --no-archived --json name -q '.[].name' | sort
         entirius-py-*)      group=py ;;
         entirius-django-*)  group=django ;;
         entirius-service-*) group=services ;;
+        entirius-pwa-*)     group=pwa ;;
         *)  echo "  skip:  ${name} (no repos/ group)"; continue ;;
     esac
     dir="repos/${group}/${name}"
@@ -44,9 +50,19 @@ gh repo list entirius --limit 200 --no-archived --json name -q '.[].name' | sort
         echo "  FAIL:  ${name}"
         continue
     fi
-    version=$(locked_version "$name")
-    if [ -n "$version" ] && git -C "$dir" checkout --quiet "v${version}" 2>/dev/null; then
-        echo "  clone: ${name} @ v${version} (service lock)"
+    if [ "$CLONE_REF" = "lock" ]; then
+        version=$(locked_version "$name")
+        if [ -n "$version" ] && git -C "$dir" checkout --quiet "v${version}" 2>/dev/null; then
+            echo "  clone: ${name} @ v${version} (service lock)"; continue
+        fi
+    elif [ -n "$CLONE_REF" ]; then
+        if git -C "$dir" checkout --quiet "$CLONE_REF" 2>/dev/null; then
+            echo "  clone: ${name} @ ${CLONE_REF}"; continue
+        fi
+    fi
+    # default: master (stable) — fall back to the repo's default branch if absent
+    if git -C "$dir" checkout --quiet master 2>/dev/null; then
+        echo "  clone: ${name} @ master"
     else
         echo "  clone: ${name} @ $(git -C "$dir" branch --show-current)"
     fi
