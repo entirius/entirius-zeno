@@ -76,7 +76,6 @@ LOCAL_APPS = [
     "django_reviews",
     "django_matrix",
     "django_checkout",
-    "django_checkout_voucher",  # must stay AFTER pim/checkout/accounts/crypt/email (FK targets)
     "django_checkout_export_to_magento_api",
     "django_checkout_import_from_magento_api",
     "django_getresponse",
@@ -85,6 +84,5 @@ LOCAL_APPS = [
     "django_crm",
 ]
 
-# Voucher-flow secrets (zeno dev-only values).
-VOUCHER_LOOKUP_HMAC_KEY = config("VOUCHER_LOOKUP_HMAC_KEY", default="zeno-dev-voucher-lookup-hmac-key")
+# django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
