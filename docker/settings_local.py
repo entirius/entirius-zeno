@@ -56,7 +56,6 @@ LOCAL_APPS = [
     "django_pim_csv",
     "django_pim_translator",
     "django_pim_export_to_magento_api",
-    "django_pim_export_to_magento_package",
     "django_vat_validator",
     "django_faq",
     "django_munin",
