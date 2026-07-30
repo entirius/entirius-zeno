@@ -20,14 +20,14 @@ init:  ## Create .env from template + repos/ layout
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
-		git clone https://github.com/entirius/$(SERVICE).git repos/services/$(SERVICE)
+		git clone git@github.com:entirius/$(SERVICE).git repos/services/$(SERVICE)
 
 clone-repos:  ## Clone ALL entirius repos into repos/ groups; modules pinned to service uv.lock versions
 	@sh scripts/clone-repos.sh $(SERVICE)
 
 clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
 	@test -d $(TESTS_PATH)/$(TESTS_REPO)/.git || \
-		git clone https://github.com/entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
+		git clone git@github.com:entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
 
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
