@@ -12,7 +12,7 @@ TESTS_PATH ?= ./repos/tests
 TESTS_REPO = entirius-test-package-emporium
 
 help:  ## List targets
-	@grep -E '^[a-z-]+:.*##' $(firstword $(MAKEFILE_LIST)) | awk -F':.*##' '{printf "  %-12s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*##' $(firstword $(MAKEFILE_LIST)) | awk -F':.*##' '{printf "  %-12s %s\n", $$1, $$2}'
 
 init:  ## Create .env from template + repos/ layout
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
