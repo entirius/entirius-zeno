@@ -63,6 +63,8 @@ LOCAL_APPS = [
     "django_deliverypoints",
     "django_qms",
     "django_email",
+    "django_contact_forms",
+    "django_regon_api",
     "django_baselinker",
     "django_crypt",
     "django_enrichment",
