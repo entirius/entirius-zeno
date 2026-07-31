@@ -37,6 +37,7 @@ To make the stack end-to-end testable, seed it with the Emporium demo dataset an
 make clone-tests   # clone entirius-test-package-emporium into repos/tests/
 make seed          # fixtures + full import pipeline (products, prices, stock, matrix)
 make bdd           # behave suite against the running service (make bdd TAGS=@matrix-v2)
+make e2e           # Playwright e2e (storefront + CMS) — needs `make frontends` up
 ```
 
 A `worker` container (celery) runs alongside the service — the seed's stock import (QMS)
@@ -169,6 +170,7 @@ entirius-zeno/
 | `make clone-tests` | Clone the Emporium test package (data + BDD) into `repos/tests/` |
 | `make seed` | Seed the service with the Emporium test package (fixtures + import pipeline) |
 | `make bdd` | Run the BDD suite against the running service (`TAGS=@tag` optional) |
+| `make e2e` | Run Playwright e2e (storefront + CMS) against the running frontends |
 | `make clean` | Remove containers and volumes |
 
 ## Configuration (.env)

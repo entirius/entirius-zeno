@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd pwa cms frontends check clean
+.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd e2e pwa cms frontends check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -148,6 +148,11 @@ seed:  ## Seed the service with the Emporium test package (fixtures + full impor
 bdd:  ## Run the BDD suite against the running service (TAGS=@tag optional)
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) bdd TAGS=$(TAGS)
+
+e2e:  ## Run Playwright e2e (storefront + CMS) against the running frontends
+	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
+	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
+	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100}
 
 check:  ## Verify canonical .gitleaks.toml is linked
 	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
