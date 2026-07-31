@@ -81,7 +81,6 @@ LOCAL_APPS = [
     "django_getresponse",
     "django_returns",
     "django_omnibus",
-    "django_crm",
 ]
 
 # django_crypt Fernet key (zeno dev-only value).
