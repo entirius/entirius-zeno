@@ -9,11 +9,11 @@ Command reference: [README](../README.md).
 ## First run (5 commands)
 
 ```bash
-make init      # .env + repos/ layout
-make build     # bake the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
-make up        # postgres + redis + rabbitmq + service + celery worker + fixtures http
-make clone-tests
-make seed      # Emporium demo dataset: products, prices, stock, discounts (~15-25 min)
+make init         # .env + repos/ layout
+make clone-tests  # test package — bind-mounted into the stack, so clone it before `up`
+make build        # bake the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
+make up           # postgres + redis + rabbitmq + service + celery worker + fixtures http
+make seed         # Emporium demo dataset: products, prices, stock, discounts (~15-25 min)
 ```
 
 Then look around:
