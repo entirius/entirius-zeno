@@ -35,6 +35,49 @@ No application code lives here — compose + Makefile + Dockerfile only.
 - `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`, `pwa/`
   (storefront + CMS). Frontend containers build from GitHub, not from `repos/pwa/`.
 
+## Green baselines
+
+| Gate | Expected | Takes |
+|---|---|---|
+| `make seed` | `SEED OK` | ~15 min |
+| `make bdd` (fresh seed) | 576 passed / 0 failed / 20 skipped | ~5 min |
+| `make e2e` (frontends up) | 2 passed | ~15 s |
+
+Suppliers-admin scenarios are one-shot per database — a BDD re-run needs a fresh `make seed`.
+
+## Where errors hide
+
+- `make dev` exits 0 even when the service failed to start — truth is in `docker compose logs service`.
+- Seed names its failed phase at the end of output: `SEED FAILED (exit N) during: <step>`.
+- Right after a dev start the dashboard may report baked mode — venv still syncing; rerun `make dashboard`.
+
+## Fix ownership
+
+Zeno is the harness — most bugs found here are fixed elsewhere:
+
+| Symptom | Fix in |
+|---|---|
+| Storefront behavior/UI | `entirius-pwa-storefront` |
+| Admin CMS behavior/UI | `entirius-pwa-cms` |
+| API/service behavior | the service repo (`SERVICE` in `.env`) |
+| BDD steps, fixtures, e2e, seed | `entirius-test-package-emporium` |
+| Makefile, compose, images, docs | here |
+
+## Gotchas
+
+- Scripted `docker compose` here MUST pass profiles — without them `ps -q` resolves
+  nothing (services depend on `db` from the `infra` profile).
+- `make clone-tests` before `make up` — the test-package checkout is bind-mounted into
+  three containers.
+- Edit `docker/settings_local.py`, never `main/settings_local.py` in the clone — the
+  entrypoint overwrites it on every dev start.
+- The dev-mode worker runs the baked image, not your mounts — restart it after module
+  changes that affect tasks.
+- Storefront config is baked at image build — a changed `SERVICE_PORT`/`PWA_CHANNEL`
+  needs `make pwa` again.
+- First `make e2e` needs `uv run --extra e2e playwright install chromium` in the
+  test-package clone (host side).
+
 ## Conventions
 
 - English only: code, docs, commits, branches, PRs.
