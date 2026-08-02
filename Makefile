@@ -7,6 +7,9 @@ export
 COMPOSE = docker compose
 COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROFILES = --profile infra --profile service
+# pwa/cms are opt-in (started by their own targets), but teardown and introspection
+# must always see the whole stack — otherwise frontends outlive `down`/`clean`.
+ALL_PROFILES = $(PROFILES) --profile pwa --profile cms
 SERVICE ?= entirius-service-volkanos
 TESTS_PATH ?= ./repos/tests
 TESTS_REPO = entirius-test-package-emporium
@@ -32,6 +35,13 @@ clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
 
+# Compose builds a missing image implicitly — without the REF build arg, so with no
+# cache busting on HEAD change. Require an explicit `make build` instead.
+define REQUIRE_IMAGE
+docker image inspect $${COMPOSE_PROJECT_NAME:-entirius-zeno}-service >/dev/null 2>&1 || \
+{ echo "service image not built yet - run 'make build' first"; exit 1; }
+endef
+
 # Resolves the remote branch SHA into $$ref — passed as a build arg so the clone layer
 # cache busts exactly on HEAD change. Empty means repo or branch does not exist: fail
 # here instead of misleadingly deep inside `git clone` in the Dockerfile.
@@ -45,6 +55,7 @@ build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
 	SERVICE_REF=$$ref $(COMPOSE) $(PROFILES) build
 
 up:  ## Start infra + service (code baked into the image)
+	@$(call REQUIRE_IMAGE)
 	$(COMPOSE) $(PROFILES) up -d
 	@$(MAKE) --no-print-directory urls
 
@@ -53,7 +64,12 @@ up-infra:  ## Start infra only (postgres, redis, rabbitmq)
 	@$(MAKE) --no-print-directory urls
 
 dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
+	@test -f repos/services/$(SERVICE)/pyproject.toml || \
+		{ echo "repos/services/$(SERVICE) is empty - run 'make clone' first"; exit 1; }
+	@$(call REQUIRE_IMAGE)
 	$(COMPOSE_DEV) $(PROFILES) up -d
+# Best-effort: right after start the venv may still be syncing, so the dashboard can
+# report stale provenance — rerun `make dashboard` once the stack settles.
 	@python3 scripts/dashboard.py 2>/dev/null || true
 	@$(MAKE) --no-print-directory urls
 
@@ -65,13 +81,13 @@ link:  ## Re-link mounted module repos without restarting (dev mode)
 		done'
 
 down:  ## Stop everything
-	$(COMPOSE_DEV) $(PROFILES) down
+	$(COMPOSE_DEV) $(ALL_PROFILES) down
 
 logs:  ## Tail logs
-	$(COMPOSE) $(PROFILES) logs -f
+	$(COMPOSE) $(ALL_PROFILES) logs -f
 
 status:  ## Container status
-	$(COMPOSE) $(PROFILES) ps
+	$(COMPOSE) $(ALL_PROFILES) ps
 
 shell:  ## Shell into the service container
 	$(COMPOSE) exec service bash
@@ -137,8 +153,8 @@ dashboard:  ## Regenerate the Zeno Suite dashboard from the live stack
 	@python3 scripts/dashboard.py
 
 seed:  ## Seed the service with the Emporium test package (fixtures + full import pipeline)
-	@CONTAINER=$$($(COMPOSE) ps -q service) \
-	DB_CONTAINER=$$($(COMPOSE) ps -q db) \
+	@CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q service) \
+	DB_CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q db) \
 	SVC_DIR=/entirius/services/$(SERVICE) \
 	DB_USER=$${POSTGRES_USER:-entirius} \
 	DB_NAME=$${POSTGRES_DB:-entirius} \
@@ -158,4 +174,4 @@ check:  ## Verify canonical .gitleaks.toml is linked
 	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
 
 clean:  ## Remove containers and volumes
-	$(COMPOSE_DEV) $(PROFILES) down -v
+	$(COMPOSE_DEV) $(ALL_PROFILES) down -v
