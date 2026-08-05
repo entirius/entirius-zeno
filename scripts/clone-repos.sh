@@ -14,6 +14,12 @@
 #
 set -e
 
+command -v gh >/dev/null 2>&1 || {
+    echo "ERROR: gh not found - clone-repos needs it to list the org's repos."
+    echo "Install (https://cli.github.com) and authenticate first: gh auth login"
+    exit 1
+}
+
 SERVICE="${1:-entirius-service-volkanos}"
 LOCK="repos/services/${SERVICE}/uv.lock"
 
@@ -31,7 +37,14 @@ if [ ! -d "repos/services/${SERVICE}/.git" ]; then
     echo "  clone: ${SERVICE} (service under test)"
 fi
 
-gh repo list entirius --limit 200 --no-archived --json name -q '.[].name' | sort | while read -r name; do
+# Captured before the loop — a failure inside `gh | while` would be masked by the pipe
+# even under `set -e`, silently cloning nothing.
+repos=$(gh repo list entirius --limit 200 --no-archived --json name -q '.[].name') || {
+    echo "ERROR: 'gh repo list' failed - is gh authenticated? (gh auth status)"
+    exit 1
+}
+
+echo "$repos" | sort | while read -r name; do
     case "$name" in
         entirius-zeno)      continue ;;
         entirius-py-*)      group=py ;;

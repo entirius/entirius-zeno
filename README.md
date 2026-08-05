@@ -40,6 +40,11 @@ make bdd           # behave suite against the running service (make bdd TAGS=@ma
 make e2e           # Playwright e2e (storefront + CMS) — needs `make frontends` up
 ```
 
+Run `make clone-tests` before `make up` — the test-package checkout is bind-mounted
+into the stack, so cloning it later needs a restart. `make e2e` runs Playwright on the
+host; install its browser once:
+`cd repos/tests/entirius-test-package-emporium && uv run --extra e2e playwright install chromium`.
+
 A `worker` container (celery) runs alongside the service — the seed's stock import (QMS)
 executes as tasks. In dev mode the worker runs the baked image, not your mounted clones —
 restart it after module changes that affect tasks.
