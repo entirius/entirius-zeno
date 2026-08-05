@@ -16,7 +16,7 @@ set -e
 
 command -v gh >/dev/null 2>&1 || {
     echo "ERROR: gh not found - clone-repos needs it to list the org's repos."
-    echo "Install and authenticate first: brew install gh && gh auth login"
+    echo "Install (https://cli.github.com) and authenticate first: gh auth login"
     exit 1
 }
 
