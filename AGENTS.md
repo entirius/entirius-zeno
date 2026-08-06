@@ -40,7 +40,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~15 min |
-| `make bdd` (fresh seed) | 576 passed / 0 failed / 20 skipped | ~5 min |
+| `make bdd` (fresh seed) | 579 passed / 0 failed / 20 skipped | ~5 min |
 | `make e2e` (frontends up) | 2 passed | ~15 s |
 
 Suppliers-admin scenarios are one-shot per database — a BDD re-run needs a fresh `make seed`.
