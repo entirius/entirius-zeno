@@ -6,6 +6,8 @@ It bridges compose env vars to Django settings; baked into the image at build
 and refreshed on every dev-mode start. Change .env on the host, not this file.
 """
 
+import importlib.util
+
 import dj_database_url
 from decouple import Csv, config
 
@@ -29,6 +31,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Dev-only: allow the in-network `fixtures` host for supplier feed downloads
 # (the SSRF guard rightly blocks private hosts in production).
 SUPPLIER_BLOCK_PRIVATE_HOSTS = False
+# Same escape hatch for django_atlas source feeds (its own url_guard).
+ATLAS_BLOCK_PRIVATE_HOSTS = False
 
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
@@ -53,6 +57,12 @@ LOCAL_APPS = [
     "django_utils_translator",
     "django_pim",
     "django_pricemanager",
+    # Private modules — no PyPI release, absent from the service uv.lock; dev mode
+    # editable-installs the repos/django/ clones. Guarded by importability so baked
+    # mode (make up) and dev without the private clones still boot instead of
+    # crash-looping on ModuleNotFoundError.
+    # atlas before pricefighter: pricefighter services import django_atlas.
+    *(m for m in ("django_atlas", "django_pricefighter") if importlib.util.find_spec(m)),
     "django_pim_csv",
     "django_pim_translator",
     "django_pim_export_to_magento_api",
