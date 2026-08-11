@@ -17,3 +17,6 @@ repos/
 
 # Generated Zeno Suite dashboard
 docker/dashboard/index.html
+
+# Playwright MCP session artifacts (snapshots, console logs) from /browser
+.playwright-mcp/

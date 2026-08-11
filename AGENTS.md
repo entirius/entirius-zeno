@@ -42,7 +42,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed) | 630 passed / 0 failed / 17 skipped | ~5 min |
+| `make bdd` (fresh seed) | 638 passed / 0 failed / 15 skipped | ~5 min |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
 
 Suppliers-admin, atlas push and atlas merge scenarios are one-shot per database —
