@@ -14,5 +14,34 @@ services:
       # shadows the host clone's .venv — the container keeps its own env in the project dir
       - service_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
 
+  # Dev worker: same mounts + editable-install entrypoint as `service`, so celery
+  # runs the local module clones (baked image lacks the private atlas/pricefighter
+  # modules entirely). -Q additionally consumes the atlas_* queues the baked
+  # command ignores. Own venv volume — sharing service_venv would race two
+  # concurrent `uv sync` runs at stack start.
+  worker:
+    entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,atlas_default,atlas_images,atlas_results"]
+    volumes:
+      - ./docker/entrypoint-dev.sh:/entirius/docker/entrypoint-dev.sh:ro
+      - ./docker/settings_local.py:/entirius/docker/settings_local.py:ro
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      - ${SERVICES_PATH:-./repos/services}:/entirius/services
+      - ${PY_PATH:-./repos/py}:/entirius/py
+      - ${DJANGO_PATH:-./repos/django}:/entirius/django
+      - worker_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+
+  # make cms-dev — the CMS container already runs `npm run serve`, so mounting the clone
+  # over the image's GitHub checkout gives hot reload straight from repos/pwa/.
+  cms:
+    volumes:
+      - ${PWA_PATH:-./repos/pwa}/entirius-pwa-cms:/entirius/pwa/entirius-pwa-cms
+      # shadows the host clone's node_modules — the named volume is seeded from the
+      # image's `npm ci`, so a changed package.json needs the volume dropped:
+      # docker volume rm ${COMPOSE_PROJECT_NAME:-entirius-zeno}_cms_node_modules
+      - cms_node_modules:/entirius/pwa/entirius-pwa-cms/node_modules
+
 volumes:
   service_venv:
+  worker_venv:
+  cms_node_modules:

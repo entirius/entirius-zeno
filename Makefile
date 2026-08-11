@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd e2e pwa cms frontends check clean
+.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -19,7 +19,7 @@ help:  ## List targets
 
 init:  ## Create .env from template + repos/ layout
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
-	@mkdir -p repos/py repos/django repos/services repos/tests
+	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
@@ -73,12 +73,16 @@ dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 	@python3 scripts/dashboard.py 2>/dev/null || true
 	@$(MAKE) --no-print-directory urls
 
-link:  ## Re-link mounted module repos without restarting (dev mode)
-	$(COMPOSE) exec service sh -c '\
-		for dir in /entirius/py/*/ /entirius/django/*/; do \
-			[ -f "$$dir/pyproject.toml" ] || continue; \
-			uv pip install --no-deps -e "$$dir"; \
-		done'
+link:  ## Re-link mounted module repos in service AND worker without restarting (dev mode)
+	@for svc in service worker; do \
+		echo "== $$svc =="; \
+		$(COMPOSE) exec $$svc sh -c '\
+			for dir in /entirius/py/*/ /entirius/django/*/; do \
+				[ -f "$$dir/pyproject.toml" ] || continue; \
+				uv pip install --no-deps -e "$$dir"; \
+			done'; \
+	done
+	@echo "NOTE: celery does not autoreload — restart the worker to pick up task-code changes"
 
 down:  ## Stop everything
 	$(COMPOSE_DEV) $(ALL_PROFILES) down
@@ -146,6 +150,12 @@ cms:  ## Start the admin CMS (build from GitHub on first run)
 	@$(call REF,entirius-pwa-cms,$${CMS_BRANCH:-develop}); \
 	CMS_REF=$$ref $(COMPOSE) $(PROFILES) --profile cms up -d --build cms
 	@$(MAKE) --no-print-directory urls
+
+cms-dev:  ## Start the admin CMS from repos/pwa/entirius-pwa-cms (hot reload)
+	@test -d repos/pwa/entirius-pwa-cms/.git || \
+		{ echo "ERROR: repos/pwa/entirius-pwa-cms not cloned — run:"; \
+		  echo "  git clone git@github.com:entirius/entirius-pwa-cms.git repos/pwa/entirius-pwa-cms"; exit 1; }
+	@$(MAKE) --no-print-directory cms COMPOSE="$(COMPOSE_DEV)"
 
 frontends: pwa cms  ## Start both frontends
 

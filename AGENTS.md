@@ -15,6 +15,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
+| `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
 | `make check` | guard: canonical `.gitleaks.toml` symlink present |
@@ -29,7 +30,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
   `uv sync --frozen` into the project-dir `.venv` (standard layout).
 - `make dev`: bind-mounts `repos/` over the image; a named volume shadows the service
   `.venv` (host clone's venv untouched); the entrypoint re-syncs and editable-installs
-  every module repo found in `repos/py/` and `repos/django/`.
+  every module repo found in `repos/py/` and `repos/django/`. The worker gets the same
+  mounts with its own venv volume and additionally consumes the `atlas_*` Celery queues.
 - Host ports are shifted +100 from standard (postgres 5532, redis 6479, rabbitmq 5772,
   service 8100) — developers run local instances on the standard ones.
 - `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`, `pwa/`
@@ -39,11 +41,12 @@ No application code lives here — compose + Makefile + Dockerfile only.
 
 | Gate | Expected | Takes |
 |---|---|---|
-| `make seed` | `SEED OK` | ~15 min |
-| `make bdd` (fresh seed) | 579 passed / 0 failed / 20 skipped | ~5 min |
-| `make e2e` (frontends up) | 2 passed | ~15 s |
+| `make seed` | `SEED OK` | ~8-15 min |
+| `make bdd` (fresh seed) | 630 passed / 0 failed / 17 skipped | ~5 min |
+| `make e2e` (frontends up) | 4 passed | ~10 s |
 
-Suppliers-admin scenarios are one-shot per database — a BDD re-run needs a fresh `make seed`.
+Suppliers-admin, atlas push and atlas merge scenarios are one-shot per database —
+a BDD re-run needs a fresh `make seed`.
 
 ## Where errors hide
 
@@ -71,8 +74,12 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   three containers.
 - Edit `docker/settings_local.py`, never `main/settings_local.py` in the clone — the
   entrypoint overwrites it on every dev start.
-- The dev-mode worker runs the baked image, not your mounts — restart it after module
-  changes that affect tasks.
+- The dev-mode worker runs your mounts, but Celery has no autoreload — restart the
+  worker after module changes that affect tasks.
+- Feed URLs pointing at the `fixtures` container need the SSRF escape hatches in
+  `docker/settings_local.py` (`SUPPLIER_BLOCK_PRIVATE_HOSTS` / `ATLAS_BLOCK_PRIVATE_HOSTS`).
+- Standalone re-runs of `seed-atlas-e2e.py` wipe the pricefighter-calibrated
+  observations — re-run `seed-atlas-workload.py` + `seed-pricefighter-e2e.py` after it.
 - Storefront config is baked at image build — a changed `SERVICE_PORT`/`PWA_CHANNEL`
   needs `make pwa` again.
 - First `make e2e` needs `uv run --extra e2e playwright install chromium` in the
