@@ -28,18 +28,6 @@ CELERY_RESULT_BACKEND = REDIS_URL + "/2"
 # Dev harness: browser frontends (storefront :3100, CMS :8180) call the API cross-origin.
 CORS_ALLOW_ALL_ORIGINS = True
 
-# TEMPORARY — remove once volkanos locks entirius-django-contentdb >= 5.1.0.
-# Up to 5.0.1 the contentdb v1 admin API (`/api-admin/contentdb/v1/`, what the CMS
-# Pages panel talks to) authenticated through django.contrib.auth.authenticate(),
-# so the Bearer token was only read if a JWT-capable backend was listed here —
-# otherwise every request 401'd and the CMS looked logged out. 5.1.0 authenticates
-# with simplejwt directly and needs none of this. `make dev` already runs the fixed
-# code from repos/; `make up` builds against uv.lock, which still pins 5.0.1.
-AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",
-    "django_accounts.backends.JWTAccessBackend",
-]
-
 # Dev-only: allow the in-network `fixtures` host for supplier feed downloads
 # (the SSRF guard rightly blocks private hosts in production).
 SUPPLIER_BLOCK_PRIVATE_HOSTS = False
