@@ -78,7 +78,7 @@ claim_repos() {
 }
 
 release_repos() {
-  [[ -n ${PLAN_FILE:-} ]] || return 0
+  [[ -f ${PLAN_FILE:-} ]] || return 0   # also runs from the EXIT trap after the handoff was archived
   local r; while IFS= read -r r; do remove_push_guard "$(repo_dir "$r")"; done < <(plan_repos "$PLAN_FILE")
 }
 
