@@ -15,7 +15,7 @@ setup() {
   export MOCK_ROLES=1 MAX_ATTEMPTS=2 MAX_REVIEW_ROUNDS=1 SENTINEL_GRACE=1 POLL_STEP=1 ROLE_TIMEOUT=60
   export MOCK_CODER_MODE=good MOCK_REVIEWER_MODE=ok MOCK_TRIAGE_MODE=retry
   export MOCK_CODER_COST=0.01 MOCK_CODER_SLEEP=0 MOCK_STEER_FIXES=0
-  unset MOCK_CODER_STRAY
+  unset MOCK_CODER_STRAY MOCK_CODER_LEAK MOCK_CODER_TAMPER
   mkdir -p "$PLANS_DIR" "$ZENO_ROOT/repo"
   cp "$RUNNER_DIR"/mocks/plans/*.md "$PLANS_DIR/"
   git init -q -b develop "$ZENO_ROOT/repo"
@@ -77,6 +77,7 @@ scenario_crash() {
   assert_eq "crash: ready after restart" ready "$(status_of 01-a.md)"
   assert_eq "crash: no duplicate attempt dir" 1 "$(archived_attempts 01)"
   assert_true "crash: resume logged" grep -q "stale claim" "$TMP/runner.log"
+  assert_true "crash: no leaked .operator hook after resume" test ! -f "$ZENO_ROOT/repo/.git/hooks/pre-push.operator"
   assert_eq "crash: journal OK line" 1 "$(journal_count '| 01 | OK |')"
   assert_true "crash: branch exists" branch_exists
   teardown
@@ -172,9 +173,105 @@ scenario_wip_header() {
   teardown
 }
 
+scenario_scope_violation() {
+  setup
+  mkdir -p "$ZENO_ROOT/repos/django/other"; git init -q -b develop "$ZENO_ROOT/repos/django/other"
+  ( cd "$ZENO_ROOT/repos/django/other" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  MOCK_CODER_STRAY=$ZENO_ROOT/repos/django/other/stray.txt run_runner
+  assert_eq "scope: parked" parked "$(status_of 01-a.md)"
+  assert_true "scope: offending path journaled" grep -q 'out-of-scope write: .*repos/django/other.*stray.txt' "$PLANS_DIR/JOURNAL.md"
+  assert_true "scope: push guard removed after park" test ! -f "$ZENO_ROOT/repo/.git/hooks/pre-push"
+  teardown
+}
+
+scenario_push_blocked() {
+  setup
+  git init -q --bare "$TMP/remote.git"; git -C "$ZENO_ROOT/repo" remote add origin "$TMP/remote.git"
+  printf '#!/bin/sh\necho operator-hook\n' > "$ZENO_ROOT/repo/.git/hooks/pre-push"; chmod +x "$ZENO_ROOT/repo/.git/hooks/pre-push"
+  MOCK_CODER_SLEEP=4 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local pid=$!
+  local i; for ((i = 0; i < 40; i++)); do grep -q 'dev-runner' "$ZENO_ROOT/repo/.git/hooks/pre-push" 2>/dev/null && break; sleep 0.1; done
+  assert_true "push: refused while claimed" bash -c "! git -C '$ZENO_ROOT/repo' push -q origin feature/mock 2>/dev/null"
+  wait "$pid" 2>/dev/null || true
+  assert_eq "push: plan ready" ready "$(status_of 01-a.md)"
+  assert_true "push: allowed after finalize" bash -c "git -C '$ZENO_ROOT/repo' push -q origin feature/mock >/dev/null 2>&1"
+  assert_eq "push: operator hook restored" "operator-hook" "$(sh "$ZENO_ROOT/repo/.git/hooks/pre-push")"
+  assert_true "push: no leaked .operator file" test ! -f "$ZENO_ROOT/repo/.git/hooks/pre-push.operator"
+  teardown
+}
+
+scenario_secret_leak() {
+  setup
+  MOCK_CODER_LEAK=1 run_runner
+  assert_eq "leak: parked" parked "$(status_of 01-a.md)"
+  assert_true "leak: reason journaled" grep -q 'secret scan failed' "$PLANS_DIR/JOURNAL.md"
+  assert_true "leak: finding recorded in gitleaks log" grep -qi 'leak' "$STATE_DIR/handoff/mock-01/attempt-1/gitleaks.log"
+  teardown
+}
+
+scenario_reviewer_reprompt() {
+  setup
+  MOCK_REVIEWER_MODE=truncated run_runner
+  assert_eq "reprompt: ready after re-prompt" ready "$(status_of 01-a.md)"
+  assert_true "reprompt: logged" grep -q 'reviewer: no findings.json — re-prompting (try 1)' "$TMP/runner.log"
+  assert_eq "reprompt: reviewer cost booked twice" 2 "$(grep -c '^reviewer' "$STATE_DIR"/handoff/archive/mock-01-*/costs.log)"
+  teardown
+}
+
+scenario_reviewer_silent() {
+  setup
+  MOCK_REVIEWER_MODE=silent run_runner
+  assert_eq "silent: parked, never clean" parked "$(status_of 01-a.md)"
+  assert_true "silent: reason journaled" grep -q 'no findings section twice' "$PLANS_DIR/JOURNAL.md"
+  teardown
+}
+
+scenario_reviewer_prose() {
+  setup
+  MOCK_REVIEWER_MODE=prose run_runner
+  assert_eq "prose: JSON after prose accepted" ready "$(status_of 01-a.md)"
+  teardown
+}
+
+scenario_plan_tamper() {
+  setup
+  MOCK_CODER_TAMPER=$PLANS_DIR/01-a.md run_runner   # coder edits its own plan file
+  assert_eq "tamper: parked" parked "$(status_of 01-a.md)"
+  assert_true "tamper: reason journaled" grep -q 'plan file changed during the run' "$PLANS_DIR/JOURNAL.md"
+  teardown
+}
+
+scenario_dirty_resume() {
+  setup
+  MOCK_CODER_SLEEP=4 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local pid=$!
+  sleep 2 && kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+  pkill -9 -f "roles/coder.sh $TMP" 2>/dev/null || true; sleep 0.5
+  echo leftover > "$ZENO_ROOT/repo/leftover.txt"     # crashed coder's uncommitted work on BRANCH
+  run_runner
+  assert_eq "dirty-resume: tolerated on BRANCH" ready "$(status_of 01-a.md)"
+  git -C "$ZENO_ROOT/repo" checkout -q develop; echo op > "$ZENO_ROOT/repo/op.txt"
+  run_runner
+  assert_true "dirty-resume: dirty develop at fresh claim parks 02" grep -q '| 02 | PARKED | dirty tree' "$PLANS_DIR/JOURNAL.md"
+  teardown
+}
+
+scenario_zeno_scope() {
+  setup
+  git init -q -b feature/mock "$ZENO_ROOT"; ( cd "$ZENO_ROOT" && printf 'repo/\n.runner/\ntodo/\n' > .gitignore && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  sed -i 's/^REPOS:.*/REPOS: ./' "$PLANS_DIR/01-a.md"; sed -i 's|^test -f repo/IMPL_OK|test -f IMPL_OK|' "$PLANS_DIR/01-a.md"
+  run_runner
+  assert_eq "zeno-scope: REPOS . on BRANCH → ready" ready "$(status_of 01-a.md)"
+  sed -i 's/^REPOS:.*/REPOS: ./' "$PLANS_DIR/02-b.md"; sed -i 's|^test -f repo/IMPL_OK|test -f IMPL_OK|' "$PLANS_DIR/02-b.md"
+  git -C "$ZENO_ROOT" checkout -qb other
+  run_runner
+  assert_true "zeno-scope: wrong zeno branch parks, never switches" grep -q "| 02 | PARKED | zeno is on 'other'" "$PLANS_DIR/JOURNAL.md"
+  assert_eq "zeno-scope: zeno still on other" other "$(git -C "$ZENO_ROOT" branch --show-current)"
+  teardown
+}
+
 main() {
   command -v jq >/dev/null || { echo "jq missing"; exit 1; }
   command -v flock >/dev/null || { echo "flock missing"; exit 1; }
+  command -v gitleaks >/dev/null || { echo "gitleaks missing (secret_leak scenario)"; exit 1; }
   local s i
   set +e
   for s in "${SCENARIOS[@]}"; do
@@ -185,5 +282,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header)
+SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope)
 main "$@"

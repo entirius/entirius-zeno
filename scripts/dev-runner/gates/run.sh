@@ -4,7 +4,7 @@ set -euo pipefail
 RUNNER_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 plan=$1
 root=${ZENO_ROOT:-$(cd "$RUNNER_DIR/../.." && pwd)}
-block=$(awk '/^```gate[[:space:]]*$/{f=1; next} f && /^```/{exit} f' "$plan")
+block=$("$RUNNER_DIR/gates/block.sh" "$plan")
 script=$(mktemp "${TMPDIR:-/tmp}/gate-XXXXXX.sh")
 trap 'rm -f "$script"' EXIT
 if [[ -z ${block//[[:space:]]/} ]]; then

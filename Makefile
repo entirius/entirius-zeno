@@ -1,4 +1,4 @@
-.PHONY: runner-once runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -238,6 +238,18 @@ runner-dry:  ## Dry run: pick the next plan, change nothing
 
 runner-test:  ## Runner mock suite (zero tokens)
 	@scripts/dev-runner/tests/run-local.sh
+
+runner-init:  ## Create role profiles ~/.claude-runner/{coder,reviewer,triage} (idempotent)
+	@scripts/dev-runner/init.sh
+
+runner-loop:  ## Tick every 5 min until scripts/dev-runner/STOP exists (sleep inhibited)
+	@scripts/dev-runner/loop.sh $(PLANS)
+
+runner-status:  ## Plans table, journal tail, today's spend
+	@scripts/dev-runner/status.sh $(PLANS)
+
+runner-stop:  ## Stop the runner after the current tick
+	@touch scripts/dev-runner/STOP && echo "STOP set — remove scripts/dev-runner/STOP to resume"
 
 check:  ## Verify canonical .gitleaks.toml is linked
 	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
