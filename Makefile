@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: runner-once runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -226,6 +226,18 @@ e2e:  ## Run Playwright e2e (storefront + CMS) against the running frontends
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100}
+
+# --- dev-runner (scripts/dev-runner): executes todo/<topic>/dev-plans one plan per tick ---
+PLANS ?= todo/product-lookup-dedup/dev-plans
+
+runner-once:  ## One runner tick on PLANS (default: lookup dev-plans)
+	@scripts/dev-runner/runner.sh --once --plans $(PLANS)
+
+runner-dry:  ## Dry run: pick the next plan, change nothing
+	@scripts/dev-runner/runner.sh --once --dry-run --plans $(PLANS)
+
+runner-test:  ## Runner mock suite (zero tokens)
+	@scripts/dev-runner/tests/run-local.sh
 
 check:  ## Verify canonical .gitleaks.toml is linked
 	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
