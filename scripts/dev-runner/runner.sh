@@ -7,6 +7,8 @@ set -euo pipefail
 RUNNER_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib.sh
 source "$RUNNER_DIR/lib.sh"
+# shellcheck source=checkpoint.sh
+source "$RUNNER_DIR/checkpoint.sh"
 
 usage() { echo "usage: runner.sh --once --plans <dir> [--dry-run]" >&2; exit 2; }
 
@@ -50,7 +52,7 @@ process_plan() {
   trap release_repos EXIT INT TERM
   local cap; cap=$(plan_header "$PLAN_FILE" BUDGET_USD); PLAN_CAP_USD=${cap:-$CODER_CAP_USD}
   local tmo; tmo=$(plan_header "$PLAN_FILE" TIMEOUT_S); [[ -n $tmo ]] && ROLE_TIMEOUT=$tmo
-  attempt_loop
+  if [[ $(plan_header "$PLAN_FILE" KIND) == checkpoint ]]; then run_checkpoint; else attempt_loop; fi
 }
 
 plan_unchanged() { [[ $(sha256sum "$PLAN_SRC" | cut -d' ' -f1) == $(cat "$HAND/plan.sha") ]]; }
@@ -197,6 +199,7 @@ finalize() { # attempt-dir
   local cost; cost=$(plan_spent "$HAND")
   plan_unchanged || { escalate "plan file changed during the run — not trusting the gate"; return 0; }
   scan_secrets "$1" || { escalate "secret scan failed (gitleaks) — see $1/gitleaks.log"; return 0; }
+  tag_done
   release_repos
   mutate plan_set_status "$PLAN_SRC" ready
   journal "$PLAN_ID | OK | \$$cost · $(attempt_count) attempt(s) · $(plan_repos "$PLAN_FILE" | paste -sd,)"

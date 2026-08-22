@@ -69,8 +69,8 @@ plan_lint() { # file → 0 ok; message on stdout when invalid
   for k in BUDGET_USD TIMEOUT_S; do
     v=$(plan_header "$f" $k); [[ -z $v || $v =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "$k '$v' not numeric"; return 1; }
   done
-  for v in $(plan_header "$f" DEPENDS | tr ',' ' '); do
-    [[ $v =~ ^[A-Za-z0-9-]+$ ]] || { echo "DEPENDS '$v'"; return 1; }
+  for v in $(plan_header "$f" DEPENDS | tr ',' ' ') $(plan_header "$f" FROM); do
+    [[ $v =~ ^[A-Za-z0-9-]+$ ]] || { echo "DEPENDS/FROM '$v'"; return 1; }
   done
   while IFS= read -r r; do
     [[ $r == . || ( $r =~ ^[A-Za-z0-9._/-]+$ && $r != *..* && $r != /* ) ]] || { echo "REPOS '$r'"; return 1; }
@@ -136,15 +136,31 @@ base_file() { echo "$BASES_DIR/${TOPIC:?}-${PLAN_ID:?}-$(basename "$1").sha"; }
 repo_base() { local f; f=$(base_file "$1"); if [[ -f $f ]]; then cat "$f"; else echo "$BASE_BRANCH"; fi; }
 record_base() { local f; f=$(base_file "$1"); [[ -f $f ]] || git -C "$1" rev-parse HEAD > "$f"; }
 
-# 0 = every REPOS repo has commits over its base (or the plan allows none). Never auto-commits.
-commit_discipline() { # plan-file → 0 ok; 1 = a REPOS repo has no commits / dirty tree
-  local f=$1 r dir
-  [[ $(plan_header "$f" NO_COMMIT_OK) == true ]] && return 0
+# 0 = every REPOS repo has commits over its base (COMMIT_ANY: true → at least one repo; NO_COMMIT_OK: true →
+# none required). Dirty trees always fail. Never auto-commits.
+commit_discipline() { # plan-file → 0 ok; 1 = violation
+  local f=$1 r dir n=0 any
+  any=$(plan_header "$f" COMMIT_ANY)
   while IFS= read -r r; do
     dir=$(repo_dir "$r")
     repo_dirty "$dir" && { log "commit discipline: dirty tree in $r"; return 1; }
-    [[ $(git -C "$dir" rev-list --count "$(repo_base "$dir")..HEAD") -gt 0 ]] || { log "commit discipline: no commits in $r"; return 1; }
+    if [[ $(git -C "$dir" rev-list --count "$(repo_base "$dir")..HEAD") -gt 0 ]]; then n=$((n + 1))
+    elif [[ $any != true ]]; then log "commit discipline: no commits in $r"; return 1; fi
   done < <(plan_repos "$f")
+  [[ $(plan_header "$f" NO_COMMIT_OK) == true || $n -gt 0 ]] || { log "commit discipline: no commits in any repo"; return 1; }
+}
+
+# Finalize anchors for checkpoints: a local lightweight tag per REPOS repo PLUS the SHA recorded outside the
+# repo (.runner/bases) — cr_make_diffs trusts the record, not the tag.
+done_tag() { echo "runner/done-$1"; }
+done_file() { echo "$BASES_DIR/done-${TOPIC:?}-$1-$(basename "$2").sha"; }
+tag_done() {
+  local r dir
+  while IFS= read -r r; do
+    dir=$(repo_dir "$r")
+    git -C "$dir" tag -f "$(done_tag "$PLAN_ID")" >/dev/null
+    git -C "$dir" rev-parse HEAD > "$(done_file "$PLAN_ID" "$dir")"
+  done < <(plan_repos "$PLAN_FILE")
 }
 
 # --- Watchdog ------------------------------------------------------------------
@@ -197,12 +213,13 @@ model_for_role() { case $1 in coder) echo "$CODER_MODEL" ;; reviewer) echo "$REV
 # Real claude -p in the role's own profile (never the operator's ~/.claude), from the zeno root, under the
 # watchdog; sentinel = <workdir>/.runner-done. Prompt via file (argv limit), cap via --max-budget-usd.
 # No parsable JSON result (crash, premature sentinel, stderr noise) = failure, never a silent success.
-run_role_live() { # role attempt-dir cap steer
+run_role_live() { # role attempt-dir cap steer [prompt-file]  (prompt-file = pre-built prompt, e.g. CR panel)
   local role=$1 hand=$2 cap=$3 steer=$4 rc=0 model dir profile=$PROFILES_DIR/$1
   dir=$(role_workdir "$role")
   [[ -f $profile/settings.json ]] || die "profile missing: $profile (make runner-init)"
   model=$(model_for_role "$role")
-  build_prompt "$role" "$hand" "$steer" > "$hand/$role-prompt.md"
+  if [[ -n ${5:-} ]]; then [[ $5 == "$hand/$role-prompt.md" ]] || cp "$5" "$hand/$role-prompt.md"
+  else build_prompt "$role" "$hand" "$steer" > "$hand/$role-prompt.md"; fi
   rm -f "$dir/.runner-done"
   WATCHDOG_STDERR=$hand/$role-stderr.log run_with_watchdog "$ROLE_TIMEOUT" "$dir/.runner-done" "$hand/$role-out.json" \
     env -C "$ZENO_ROOT" CLAUDE_CONFIG_DIR="$profile" ${ANTHROPIC_API_KEY:+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"} \
@@ -286,9 +303,11 @@ remove_push_guard() { # repo-dir
   return 0
 }
 
-all_repo_dirs() { # every git repo the runner watches: repos/*/* + zeno root
-  local d
-  for d in "$ZENO_ROOT"/repos/*/*/ "$ZENO_ROOT/"; do [[ -d $d/.git ]] && echo "${d%/}"; done
+all_repo_dirs() { # every git repo the runner watches: repos/*/* + zeno root + the plan's own REPOS
+  { local d r
+    for d in "$ZENO_ROOT"/repos/*/*/ "$ZENO_ROOT/"; do [[ -d $d/.git ]] && echo "${d%/}"; done
+    [[ -n ${PLAN_FILE:-} ]] && while IFS= read -r r; do d=$(repo_dir "$r"); [[ -d $d/.git ]] && echo "$d"; done < <(plan_repos "$PLAN_FILE")
+  } | sort -u
 }
 
 # Snapshot = porcelain + HEAD per watched repo, plus hashes of gitignored-but-sensitive files.

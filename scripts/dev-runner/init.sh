@@ -18,7 +18,7 @@ plugins_for() { # role → JSON object of enabledPlugins
 }
 
 # Deny rules still apply under bypassPermissions — second layer behind the runner's post-hoc guards.
-DENY='["Bash(git push:*)", "Bash(git remote:*)", "Bash(git config:*)", "Read(//home/**/.ssh/**)", "Read(//home/**/.claude/**)", "Read(//home/**/.claude-runner/**)", "Read(./.env)", "Write(./.env)", "Read(./scripts/dev-runner/.env)", "Write(./scripts/dev-runner/**)"]'
+DENY='["Bash(git push:*)", "Bash(git remote:*)", "Bash(git config:*)", "Bash(git tag:*)", "Read(//home/**/.ssh/**)", "Read(//home/**/.claude/**)", "Read(//home/**/.claude-runner/**)", "Read(./.env)", "Write(./.env)", "Read(./scripts/dev-runner/.env)", "Write(./scripts/dev-runner/**)"]'
 
 write_profile() { # role — merges over an existing settings.json (operator additions survive)
   local dir=$PROFILES_DIR/$1 gen

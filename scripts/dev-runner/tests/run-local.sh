@@ -11,11 +11,13 @@ PASS=0 FAIL=0
 setup() {
   TMP=$(mktemp -d)
   export ZENO_ROOT=$TMP/root PLANS_DIR=$TMP/root/todo/mock/dev-plans
-  export STATE_DIR=$TMP/root/.runner STOP_FILE=$TMP/STOP ENV_FILE=/dev/null
+  export STATE_DIR=$TMP/root/.runner STOP_FILE=$TMP/STOP ENV_FILE=/dev/null GATES_DIR=$TMP/gates
+  mkdir -p "$TMP/gates"; cp "$RUNNER_DIR"/gates/run.sh "$RUNNER_DIR"/gates/block.sh "$TMP/gates/"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP/gates/DEFAULT.sh"; chmod +x "$TMP/gates/DEFAULT.sh"   # seeded FIX/BG plans use the default gate
   export MOCK_ROLES=1 MAX_ATTEMPTS=2 MAX_REVIEW_ROUNDS=1 SENTINEL_GRACE=1 POLL_STEP=1 ROLE_TIMEOUT=60
   export MOCK_CODER_MODE=good MOCK_REVIEWER_MODE=ok MOCK_TRIAGE_MODE=retry
   export MOCK_CODER_COST=0.01 MOCK_CODER_SLEEP=0 MOCK_STEER_FIXES=0
-  unset MOCK_CODER_STRAY MOCK_CODER_LEAK MOCK_CODER_TAMPER
+  unset MOCK_CODER_STRAY MOCK_CODER_LEAK MOCK_CODER_TAMPER MOCK_CR_JSON MOCK_CR_FAIL MOCK_CR_PROSE
   mkdir -p "$PLANS_DIR" "$ZENO_ROOT/repo"
   cp "$RUNNER_DIR"/mocks/plans/*.md "$PLANS_DIR/"
   git init -q -b develop "$ZENO_ROOT/repo"
@@ -27,7 +29,7 @@ trap 'rm -rf "${TMP:-}"' EXIT
 run_runner() { "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" "$@" >>"$TMP/runner.log" 2>&1 || true; }
 status_of() { head -12 "$PLANS_DIR/$1" | sed -n 's/^STATUS: *//p'; }
 readme_status() { awk -F'|' -v id="$1" '$2 ~ "^ *"id" *$" {gsub(/ /,"",$4); print $4}' "$PLANS_DIR/00-README.md"; }
-journal_count() { [[ -f $PLANS_DIR/JOURNAL.md ]] && grep -c "$1" "$PLANS_DIR/JOURNAL.md" || echo 0; }
+journal_count() { { [[ -f $PLANS_DIR/JOURNAL.md ]] && grep -cF -- "$1" "$PLANS_DIR/JOURNAL.md"; } || echo 0; }
 attempts() { find "$STATE_DIR/handoff" -path "*/mock-$1/attempt-*" -maxdepth 3 -type d 2>/dev/null | wc -l; }
 archived_attempts() { find "$STATE_DIR/handoff/archive" -path "*/mock-$1-*/attempt-*" -maxdepth 2 -type d 2>/dev/null | wc -l; }
 branch_exists() { git -C "$ZENO_ROOT/repo" show-ref -q refs/heads/feature/mock; }
@@ -268,6 +270,105 @@ scenario_zeno_scope() {
   teardown
 }
 
+# shellcheck disable=SC2016  # markdown backticks
+seed_checkpoint() { # 03-cp.md: KIND checkpoint FROM 01, depends on 01
+  sed 's/^KIND: stage/KIND: checkpoint\nFROM: 01/; s/^DEPENDS:$/DEPENDS: 01/; s/Plan 01 — mock A/Plan 03 — checkpoint/' "$PLANS_DIR/01-a.md" > "$PLANS_DIR/03-cp.md"
+  sed -i '/^```gate/,/^```$/d' "$PLANS_DIR/03-cp.md"
+  echo '| 03 | `03-cp.md` | to-dev | 01 | mock | checkpoint |' >> "$PLANS_DIR/00-README.md"
+}
+
+scenario_cr_clean() {
+  setup; seed_checkpoint; rm -f "$PLANS_DIR/02-b.md"
+  run_runner   # 01 → ready + tag runner/done-01
+  assert_true "cr-clean: done tag set at finalize" bash -c "git -C '$ZENO_ROOT/repo' rev-parse -q --verify runner/done-01 >/dev/null"
+  ( cd "$ZENO_ROOT/repo" && echo more > more.txt && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: more" )
+  MOCK_CR_JSON='{"findings":[{"severity":"major","file":"a.py:1","note":"debt for the background"}]}' run_runner
+  assert_eq "cr-clean: checkpoint ready" ready "$(status_of 03-cp.md)"
+  assert_eq "cr-clean: CHECKPOINT OK journaled" 1 "$(journal_count '| 03 | CHECKPOINT OK | critical=0 major=')"
+  assert_true "cr-clean: BG plan seeded" test -f "$PLANS_DIR/BG-03-checkpoint.md"
+  assert_eq "cr-clean: BG plan is to-dev without gate block" "to-dev" "$(status_of BG-03-checkpoint.md)"
+  assert_true "cr-clean: BG has no gate block" bash -c "! grep -q '^\`\`\`gate' '$PLANS_DIR/BG-03-checkpoint.md'"
+  assert_true "cr-clean: checkpoint tagged itself" bash -c "git -C '$ZENO_ROOT/repo' rev-parse -q --verify runner/done-03 >/dev/null"
+  assert_true "cr-clean: push guard released" test ! -f "$ZENO_ROOT/repo/.git/hooks/pre-push"
+  assert_eq "cr-clean: README row for BG plan" to-dev "$(readme_status BG-03)"
+  run_runner   # BG plan runs as an ordinary stage (default gate)
+  assert_eq "cr-clean: BG plan ready" ready "$(status_of BG-03-checkpoint.md)"
+  teardown
+}
+
+scenario_cr_block() {
+  setup; seed_checkpoint; rm -f "$PLANS_DIR/02-b.md"
+  run_runner
+  ( cd "$ZENO_ROOT/repo" && echo more > more.txt && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: more" )
+  MOCK_CR_JSON='{"findings":[{"severity":"critical","file":"b.py:9","note":"broken invariant"}]}' run_runner
+  assert_eq "cr-block: checkpoint back to to-dev" to-dev "$(status_of 03-cp.md)"
+  assert_eq "cr-block: DEPENDS gained FIX id" "01, FIX-03" "$(head -12 "$PLANS_DIR/03-cp.md" | sed -n 's/^DEPENDS: *//p')"
+  assert_true "cr-block: FIX plan seeded" test -f "$PLANS_DIR/FIX-03-checkpoint.md"
+  assert_eq "cr-block: README row for FIX plan" to-dev "$(readme_status FIX-03)"
+  assert_true "cr-block: FIX has COMMIT_ANY" grep -q '^COMMIT_ANY: true' "$PLANS_DIR/FIX-03-checkpoint.md"
+  assert_eq "cr-block: BLOCKED journaled" 1 "$(journal_count '| 03 | CHECKPOINT BLOCKED | critical=')"
+  run_runner   # FIX runs as a stage
+  assert_eq "cr-block: FIX ready" ready "$(status_of FIX-03-checkpoint.md)"
+  assert_eq "cr-block: checkpoint still waiting" to-dev "$(status_of 03-cp.md)"
+  MOCK_CR_JSON='{"findings":[]}' run_runner   # checkpoint returns and passes
+  assert_eq "cr-block: checkpoint ready after FIX" ready "$(status_of 03-cp.md)"
+  teardown
+}
+
+scenario_cr_missing_tag() {
+  setup; seed_checkpoint; rm -f "$PLANS_DIR/02-b.md"
+  sed -i 's/^STATUS: to-dev/STATUS: ready/' "$PLANS_DIR/01-a.md"   # ready without ever running → no tag
+  run_runner
+  assert_eq "cr-tag: parked" parked "$(status_of 03-cp.md)"
+  assert_true "cr-tag: reason journaled" grep -q 'no finalize record for 01' "$PLANS_DIR/JOURNAL.md"
+  teardown
+}
+
+scenario_cr_prose() {
+  setup; seed_checkpoint; rm -f "$PLANS_DIR/02-b.md"
+  run_runner
+  ( cd "$ZENO_ROOT/repo" && echo more > more.txt && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: more" )
+  MOCK_CR_PROSE=1 run_runner
+  assert_eq "cr-prose: JSON after prose accepted" ready "$(status_of 03-cp.md)"
+  teardown
+}
+
+scenario_cr_inconclusive() {
+  setup; seed_checkpoint; rm -f "$PLANS_DIR/02-b.md"
+  run_runner
+  ( cd "$ZENO_ROOT/repo" && echo more > more.txt && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: more" )
+  MOCK_CR_FAIL=1 run_runner
+  assert_eq "cr-inconclusive: parked" parked "$(status_of 03-cp.md)"
+  assert_true "cr-inconclusive: reason journaled" grep -q "checkpoint inconclusive: reviewer 'contract' failed twice" "$PLANS_DIR/JOURNAL.md"
+  assert_true "cr-inconclusive: no done tag for the checkpoint" bash -c "! git -C '$ZENO_ROOT/repo' rev-parse -q --verify runner/done-03 >/dev/null 2>&1"
+  teardown
+}
+
+scenario_cr_reblock() {
+  setup; seed_checkpoint; rm -f "$PLANS_DIR/02-b.md"
+  run_runner
+  ( cd "$ZENO_ROOT/repo" && echo more > more.txt && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: more" )
+  export MOCK_CR_JSON='{"findings":[{"severity":"critical","file":"b.py:9","note":"still broken"}]}'
+  run_runner; run_runner   # block → FIX ready
+  assert_eq "cr-reblock: FIX ready" ready "$(status_of FIX-03-checkpoint.md)"
+  run_runner               # panel still critical → operator, never a paid loop
+  assert_eq "cr-reblock: parked" parked "$(status_of 03-cp.md)"
+  assert_true "cr-reblock: reason journaled" grep -q 'still blocked after FIX-03 was fixed' "$PLANS_DIR/JOURNAL.md"
+  assert_eq "cr-reblock: DEPENDS not duplicated" "01, FIX-03" "$(head -12 "$PLANS_DIR/03-cp.md" | sed -n 's/^DEPENDS: *//p')"
+  unset MOCK_CR_JSON
+  teardown
+}
+
+scenario_cr_moved_tag() {
+  setup; seed_checkpoint; rm -f "$PLANS_DIR/02-b.md"
+  run_runner
+  ( cd "$ZENO_ROOT/repo" && echo more > more.txt && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: more" && git tag -f runner/done-01 HEAD >/dev/null )
+  run_runner
+  assert_eq "cr-moved-tag: parked" parked "$(status_of 03-cp.md)"
+  assert_true "cr-moved-tag: reason journaled" grep -q 'does not match the finalize record' "$PLANS_DIR/JOURNAL.md"
+  teardown
+}
+
 main() {
   command -v jq >/dev/null || { echo "jq missing"; exit 1; }
   command -v flock >/dev/null || { echo "flock missing"; exit 1; }
@@ -282,5 +383,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope)
+SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag)
 main "$@"

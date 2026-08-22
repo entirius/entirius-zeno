@@ -36,7 +36,7 @@ pick plan (first in-dev = stale claim, else lowest to-dev with DEPENDS ready)
 ## Plan contract
 
 Header (first 12 lines, `KEY: value`): `STATUS`, `KIND`, `DEPENDS`, `REPOS` (comma list relative to zeno root,
-`.` = zeno), `BRANCH`, `BUDGET_USD`, `TIMEOUT_S`, optional `NO_COMMIT_OK: true`. One fenced ```` ```gate ````
+`.` = zeno), `BRANCH`, `BUDGET_USD`, `TIMEOUT_S`, optional `NO_COMMIT_OK: true` / `COMMIT_ANY: true` (≥1 repo with commits). One fenced ```` ```gate ````
 block = acceptance, run from the zeno root with `set -euo pipefail` (missing → `gates/DEFAULT.sh`). A
 "## Prompt for the dev session" fenced block feeds the coder. Header lint at claim: numeric caps, safe branch/ids,
 no `..`/absolute `REPOS`. `STATUS:` in the plan file is authoritative; the `00-README.md` table is mirrored.
@@ -62,6 +62,17 @@ no `..`/absolute `REPOS`. `STATUS:` in the plan file is authoritative; the `00-R
 - Reviewer without a parsable `findings.json` → one re-prompt, then `parked` (never counted as clean).
 - Untrusted text (gate.log, steer, findings) is nonce-fenced in prompts and labelled as data.
 - `scripts/dev-runner/init.sh --logout` removes copied role credentials (`RUNNER_SHARE_LOGIN=1`).
+
+## Checkpoints
+
+A plan with `KIND: checkpoint` + `FROM: <id>` reviews `runner/done-<FROM>..HEAD` in every `REPOS` repo
+(tags are set locally at each plan's finalize and verified against the SHA recorded in `.runner/bases/` — a
+moved tag parks the checkpoint). The panel runs in the reviewer profile with `guard_scope`, budget and
+"no commits during the review" checks. Three independent reviewer calls (contract / tests /
+regressions, `prompts/cr/panel-base.md`); a reviewer failing twice = inconclusive → `parked`. Criticals →
+`FIX-<id>-checkpoint.md` seeded (`to-dev`, default gate, no gate block — panel text never reaches bash) and the
+checkpoint's `DEPENDS` gains it (the checkpoint re-runs after the FIX is `ready`); majors → `BG-<id>-checkpoint.md`
+(no dependency). `FIX-`/`BG-` plans run after numbered plans, ordered by creation. Checkpoints need no commits.
 
 ## State
 
