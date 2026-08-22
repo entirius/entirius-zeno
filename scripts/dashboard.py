@@ -17,6 +17,9 @@ SERVICES = [
     ("service", 8000, "Volkanos API", "/api/schema/swagger-ui/"),
     ("pwa", 3000, "Storefront", "/"),
     ("cms", 8080, "Admin CMS", "/"),
+    ("docs", 4321, "Docs portal", "/"),
+    ("docs-alt", 4321, "Docs portal (branch)", "/"),
+    ("www", 3000, "entirius.com (www)", "/"),
     ("rabbitmq", 15672, "RabbitMQ", "/"),
 ]
 
