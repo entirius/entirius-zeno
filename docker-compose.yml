@@ -126,6 +126,53 @@ services:
     networks:
       - zeno
 
+  # Documentation portal — served from the repos/docs/ clone (private GitLab, see
+  # make clone-docs) with hot reload; host port shifted +100 from Astro's 4321.
+  docs:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.docs
+    profiles: [docs]
+    ports:
+      - "${DOCS_PORT:-4421}:4321"
+    volumes:
+      - ${DOCS_PATH:-./repos/docs}/entirius-docs:/entirius/docs
+      - docs_node_modules:/entirius/docs/node_modules
+    networks:
+      - zeno
+
+  # Second docs instance for a feature branch, side by side with develop (make docs-alt).
+  docs-alt:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.docs
+    profiles: [docs]
+    ports:
+      - "${DOCS_ALT_PORT:-4422}:4321"
+    volumes:
+      - ${DOCS_PATH:-./repos/docs}/entirius-docs-${DOCS_ALT_BRANCH:-alt}:/entirius/docs
+      - docs_alt_node_modules:/entirius/docs/node_modules
+    networks:
+      - zeno
+
+  # Marketing site entirius.com — Next.js dev server from repos/www/ (make www WWW_BRANCH=x).
+  www:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.www
+    profiles: [www]
+    ports:
+      - "${WWW_PORT:-3200}:3000"
+    environment:
+      NEXT_PUBLIC_BASE_URL: http://localhost:${WWW_PORT:-3200}
+      ALLOWED_HOSTS: localhost,localhost:${WWW_PORT:-3200}
+    volumes:
+      - ${WWW_PATH:-./repos/www}/entirius-react-www-${WWW_BRANCH:-master}:/entirius/www
+      - www_node_modules:/entirius/www/node_modules
+      - www_next:/entirius/www/.next
+    networks:
+      - zeno
+
   # Zeno Suite — a generated dashboard (make dashboard) of the live stack: real ports,
   # which volkanos packages are editable from repos/ vs baked, test packages present.
   dashboard:
@@ -183,6 +230,10 @@ volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  docs_node_modules:
+  docs_alt_node_modules:
+  www_node_modules:
+  www_next:
 
 networks:
   zeno:

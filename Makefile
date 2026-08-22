@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos clone-tests refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends check clean
+.PHONY: help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -9,9 +9,14 @@ COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROFILES = --profile infra --profile service
 # pwa/cms are opt-in (started by their own targets), but teardown and introspection
 # must always see the whole stack — otherwise frontends outlive `down`/`clean`.
-ALL_PROFILES = $(PROFILES) --profile pwa --profile cms
+ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile docs --profile www
 SERVICE ?= entirius-service-volkanos
 TESTS_PATH ?= ./repos/tests
+DOCS_PATH ?= ./repos/docs
+DOCS_REPO = ssh://git@gitlab.lazelab.com:4227/entirius/entirius-docs.git
+WWW_PATH ?= ./repos/www
+WWW_BRANCH ?= master
+WWW_REPO = ssh://git@gitlab.lazelab.com:4227/entirius/entirius-react-www.git
 TESTS_REPO = entirius-test-package-emporium
 
 help:  ## List targets
@@ -19,7 +24,7 @@ help:  ## List targets
 
 init:  ## Create .env from template + repos/ layout
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
-	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa
+	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa repos/docs repos/www
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
@@ -57,6 +62,19 @@ build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
 up:  ## Start infra + service (code baked into the image)
 	@$(call REQUIRE_IMAGE)
 	$(COMPOSE) $(PROFILES) up -d
+	@$(MAKE) --no-print-directory urls
+
+docs-alt:  ## Start a second docs portal from a feature branch: make docs-alt DOCS_ALT_BRANCH=<branch>
+	@test -n "$(DOCS_ALT_BRANCH)" || { echo "ERROR: DOCS_ALT_BRANCH is required (e.g. make docs-alt DOCS_ALT_BRANCH=rafaldev)"; exit 1; }
+	@test -d $(DOCS_PATH)/entirius-docs-$(DOCS_ALT_BRANCH)/.git || \
+		git clone -b $(DOCS_ALT_BRANCH) $(DOCS_REPO) $(DOCS_PATH)/entirius-docs-$(DOCS_ALT_BRANCH)
+	@DOCS_ALT_BRANCH=$(DOCS_ALT_BRANCH) $(COMPOSE) $(PROFILES) --profile docs up -d --build docs-alt
+	@$(MAKE) --no-print-directory urls
+
+www:  ## Start the marketing site (Next.js, hot reload) from repos/www/entirius-react-www-$(WWW_BRANCH)
+	@test -d $(WWW_PATH)/entirius-react-www-$(WWW_BRANCH)/.git || \
+		git clone -b $(WWW_BRANCH) $(WWW_REPO) $(WWW_PATH)/entirius-react-www-$(WWW_BRANCH)
+	@WWW_BRANCH=$(WWW_BRANCH) $(COMPOSE) $(PROFILES) --profile www up -d --build www
 	@$(MAKE) --no-print-directory urls
 
 up-infra:  ## Start infra only (postgres, redis, rabbitmq)
@@ -107,6 +125,12 @@ urls:  ## URLs and ports of running services
 	[ -n "$$p" ] && { echo "  storefront   http://localhost:$$p"; up=1; }; \
 	p=$$($(COMPOSE) --profile cms port cms 8080 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  cms          http://localhost:$$p  (admin / admin123)"; up=1; }; \
+	p=$$($(COMPOSE) --profile docs port docs 4321 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  docs         http://localhost:$$p"; up=1; }; \
+	p=$$($(COMPOSE) --profile docs port docs-alt 4321 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  docs-alt     http://localhost:$$p  (branch: $${DOCS_ALT_BRANCH:-?})"; up=1; }; \
+	p=$$($(COMPOSE) --profile www port www 3000 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  www          http://localhost:$$p  (branch: $(WWW_BRANCH))"; up=1; }; \
 	p=$$($(COMPOSE) port db 5432 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  postgres     localhost:$$p  ($${POSTGRES_USER:-entirius}/$${POSTGRES_PASSWORD:-entirius-dev}, db: $${POSTGRES_DB:-entirius})"; up=1; }; \
 	p=$$($(COMPOSE) port redis 6379 2>/dev/null | cut -d: -f2); \
@@ -158,6 +182,13 @@ cms-dev:  ## Start the admin CMS from repos/pwa/entirius-pwa-cms (hot reload)
 	@$(MAKE) --no-print-directory cms COMPOSE="$(COMPOSE_DEV)"
 
 frontends: pwa cms  ## Start both frontends
+
+clone-docs:  ## Clone the documentation portal (private GitLab) into repos/docs/
+	@test -d $(DOCS_PATH)/entirius-docs/.git || git clone $(DOCS_REPO) $(DOCS_PATH)/entirius-docs
+
+docs: clone-docs  ## Start the docs portal from repos/docs/entirius-docs (hot reload)
+	@$(COMPOSE) $(PROFILES) --profile docs up -d --build docs
+	@$(MAKE) --no-print-directory urls
 
 dashboard:  ## Regenerate the Zeno Suite dashboard from the live stack
 	@python3 scripts/dashboard.py
