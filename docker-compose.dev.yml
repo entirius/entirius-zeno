@@ -41,7 +41,35 @@ services:
       # docker volume rm ${COMPOSE_PROJECT_NAME:-entirius-zeno}_cms_node_modules
       - cms_node_modules:/entirius/pwa/entirius-pwa-cms/node_modules
 
+  # Image-embedding HTTP service for the lookup module (make embed, profile `embed`).
+  # GPU when the host has a CDI spec (Makefile picks EMBED_GPU automatically; override with
+  # EMBED_GPU=0/1), layering docker-compose.gpu.yml (CUDA image + GPU via CDI). First start downloads EMBED_MODEL from Hugging Face (minutes) into hf_cache —
+  # hence the long start_period. Host port shifted +100 from Infinity's 7997.
+  embed:
+    image: michaelf34/infinity:0.0.77-cpu
+    profiles: [embed]
+    command: ["v2", "--model-id", "${EMBED_MODEL:-google/siglip-so400m-patch14-384}", "--port", "7997", "--engine", "torch", "--device", "cpu", "--no-trust-remote-code"]
+    # Loopback only: the API has no auth and fetches URLs server-side (SSRF pivot into the zeno network
+    # if exposed to the LAN); containers reach it as embed:7997 regardless.
+    ports:
+      - "127.0.0.1:${EMBED_PORT:-8097}:7997"
+    environment:
+      HF_HOME: /app/.cache
+      DO_NOT_TRACK: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    volumes:
+      - hf_cache:/app/.cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7997/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+    networks:
+      - zeno
+
 volumes:
   service_venv:
   worker_venv:
   cms_node_modules:
+  hf_cache:

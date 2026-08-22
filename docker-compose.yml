@@ -2,7 +2,9 @@ services:
   # --- Infrastructure ---------------------------------------------------
 
   db:
-    image: postgres:16-alpine
+    # pgvector build of Postgres 16 (lookup module: vector + pg_trgm + unaccent). Extensions are
+    # created by module migrations — the harness only guarantees they are available.
+    image: pgvector/pgvector:pg16
     profiles: [infra]
     ports:
       - "${POSTGRES_PORT:-5532}:5432"
@@ -73,6 +75,8 @@ services:
       DEBUG: "true"
       ALLOWED_HOSTS: localhost,127.0.0.1,service
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
+      EMBED_DIM: ${EMBED_DIM:-1152}
     volumes:
       # Emporium test package (make clone-tests) — seed scripts and QMS csv_path expect this path
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
@@ -214,6 +218,8 @@ services:
       DEBUG: "true"
       ALLOWED_HOSTS: localhost,127.0.0.1,service
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
+      EMBED_DIM: ${EMBED_DIM:-1152}
     volumes:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
     depends_on:

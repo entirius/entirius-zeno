@@ -34,6 +34,20 @@ SUPPLIER_BLOCK_PRIVATE_HOSTS = False
 # Same escape hatch for django_atlas source feeds (its own url_guard).
 ATLAS_BLOCK_PRIVATE_HOSTS = False
 
+# Lookup module (django_lookup): image embeddings from the in-network `embed` container
+# (make embed). Model/dim mirror .env — the HalfVectorField dimension must match EMBED_DIM.
+LOOKUP_EMBEDDING = {
+    "provider": "http",
+    "url": "http://embed:7997/embeddings",
+    "model": config("EMBED_MODEL", default="google/siglip-so400m-patch14-384"),
+    "dim": config("EMBED_DIM", default=1152, cast=int),
+    "timeout_s": 10,
+}
+LOOKUP_EMBED_ALLOWED_HOSTS = ["embed"]
+LOOKUP_IMAGE_ENABLED = True
+# kind -> provider module; filled by plan 03 (pim + atlas providers).
+LOOKUP_PROVIDERS: dict[str, str] = {}
+
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
 QMS_TYPE = "XRAY"
@@ -63,6 +77,8 @@ LOCAL_APPS = [
     # crash-looping on ModuleNotFoundError.
     # atlas before pricefighter: pricefighter services import django_atlas.
     *(m for m in ("django_atlas", "django_pricefighter") if importlib.util.find_spec(m)),
+    # lookup (private, plan 02): fingerprints over PIM + atlas; providers wired by plan 03.
+    *(m for m in ("django_lookup",) if importlib.util.find_spec(m)),
     "django_pim_csv",
     "django_pim_translator",
     "django_pim_export_to_magento_api",

@@ -13,6 +13,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make build` / `up` / `down` | build image, start/stop the stack |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
+| `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container |
+| `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -35,7 +37,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
   every module repo found in `repos/py/` and `repos/django/`. The worker gets the same
   mounts with its own venv volume and additionally consumes the `atlas_*` Celery queues.
 - Host ports are shifted +100 from standard (postgres 5532, redis 6479, rabbitmq 5772,
-  service 8100) — developers run local instances on the standard ones.
+  service 8100, embed 8097) — developers run local instances on the standard ones.
 - `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`, `pwa/`
   (storefront + CMS), `docs/` (documentation portal), `www/` (entirius.com). Frontend containers build from GitHub, not from `repos/pwa/`.
 
@@ -86,6 +88,13 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   needs `make pwa` again.
 - First `make e2e` needs `uv run --extra e2e playwright install chromium` in the
   test-package clone (host side).
+- Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
+  create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc
+  collation: run `REINDEX DATABASE entirius` once after the switch).
+- `make embed` GPU variant needs the GPU visible to Docker via CDI (`/etc/cdi/nvidia.yaml`,
+  generated with `nvidia-ctk cdi generate`; regenerate after a driver update). Without the spec `make embed`
+  falls back to CPU. First start downloads `EMBED_MODEL` (minutes) into the `hf_cache` volume — `make clean`
+  deletes it; the healthcheck allows 5 min.
 
 ## Roadmap & Todo (local only)
 
