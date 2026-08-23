@@ -14,7 +14,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container |
-| `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces |
+| `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
+| `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -46,11 +47,13 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed) | 638 passed / 0 failed / 15 skipped | ~5 min |
+| `make bdd` (fresh seed) | 647 passed / 0 failed / 15 skipped | ~5 min |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
+| `make lookup-eval` (fresh seed, embed up) | 240 pairs · P/R @45 = 0.59/0.98 · @75 = 1.00/0.31 · recall@50 name 0.99 · recall@20 image 0.90 (SigLIP so400m, measured 2026-08-23) | ~1 min |
 
-Suppliers-admin, atlas push and atlas merge scenarios are one-shot per database —
-a BDD re-run needs a fresh `make seed`.
+Suppliers-admin, atlas push, atlas merge and `@lookup-oneshot` scenarios are one-shot per database —
+a BDD re-run needs a fresh `make seed`. The lookup numbers are measured, never derived: re-measure after
+any change to scoring, fixtures or the embedding model.
 
 ## Where errors hide
 
