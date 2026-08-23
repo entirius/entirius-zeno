@@ -1,4 +1,4 @@
-.PHONY: runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -90,6 +90,9 @@ dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 		{ echo "repos/services/$(SERVICE) is empty - run 'make clone' first"; exit 1; }
 	@$(call REQUIRE_IMAGE)
 	$(COMPOSE_DEV) $(PROFILES) up -d
+# `up` without the embed profile would leave an already-running embed orphaned/stopped on
+# the next recreate — keep it in the stack when it is up (the lookup module needs it).
+	@docker ps --format '{{.Names}}' | grep -q -- '-embed-1$$' && $(MAKE) --no-print-directory embed >/dev/null || true
 # Best-effort: right after start the venv may still be syncing, so the dashboard can
 # report stale provenance — rerun `make dashboard` once the stack settles.
 	@python3 scripts/dashboard.py 2>/dev/null || true
@@ -112,6 +115,10 @@ embed:  ## Start the embedding service (profile embed; EMBED_GPU=0 for CPU) — 
 
 # Runs the module's own suite with the service venv (dev mode: repos/django/ is mounted at
 # /entirius/django). -p no:cacheprovider: container is root, the repo is a bind mount.
+lookup-eval:  ## Measure lookup precision/recall on the labelled pairs of the test package (fresh `make seed` first)
+	@$(COMPOSE) $(PROFILES) exec -T service python manage.py lookup_eval \
+		--pairs /entirius/test-package/fixtures/lookup/labelled_pairs.csv $(LOOKUP_EVAL_ARGS)
+
 module-test:  ## Run a mounted module's tests in the service container: make module-test MODULE=entirius-django-x
 	@echo "$(MODULE)" | grep -Eq '^[A-Za-z0-9._-]+$$' || { echo "ERROR: MODULE is required (e.g. make module-test MODULE=entirius-django-lookup)"; exit 1; }
 	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
