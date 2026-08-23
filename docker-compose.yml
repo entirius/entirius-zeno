@@ -212,7 +212,7 @@ services:
         branch: ${SERVICE_BRANCH:-master}
         ref: ${SERVICE_REF:-unknown}
     profiles: [service]
-    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions"]
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup"]
     environment:
       ENVIRONMENT: development
       DEBUG: "true"

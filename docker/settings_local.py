@@ -45,8 +45,12 @@ LOOKUP_EMBEDDING = {
 }
 LOOKUP_EMBED_ALLOWED_HOSTS = ["embed"]
 LOOKUP_IMAGE_ENABLED = True
-# kind -> provider module; filled by plan 03 (pim + atlas providers).
-LOOKUP_PROVIDERS: dict[str, str] = {}
+# kind -> provider module (plan 03). Each entry is imported lazily by django_lookup's registry,
+# so a missing module only breaks that kind — the rest of the stack boots.
+LOOKUP_PROVIDERS: dict[str, str] = {
+    "pim_product": "django_pim.services.lookup_provider",
+    "atlas_source_product": "django_atlas.services.lookup_provider",
+}
 
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
