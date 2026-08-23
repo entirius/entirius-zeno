@@ -45,6 +45,9 @@ LOOKUP_EMBEDDING = {
 }
 LOOKUP_EMBED_ALLOWED_HOSTS = ["embed"]
 LOOKUP_IMAGE_ENABLED = True
+# Dev-only: atlas source images live on the in-network `fixtures` host, which django_lookup's own
+# SSRF guard blocks by default (same escape hatch as ATLAS_BLOCK_PRIVATE_HOSTS above).
+LOOKUP_BLOCK_PRIVATE_HOSTS = False
 # kind -> provider module (plan 03). Each entry is imported lazily by django_lookup's registry,
 # so a missing module only breaks that kind — the rest of the stack boots.
 LOOKUP_PROVIDERS: dict[str, str] = {
