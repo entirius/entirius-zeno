@@ -322,9 +322,8 @@ scope_snapshot() {
     git -C "$d" status --porcelain --untracked-files=all | sed "s|^|$d\t|"
     printf '%s\tHEAD %s\n' "$d" "$(git -C "$d" rev-parse HEAD 2>/dev/null)"
   done < <(all_repo_dirs)
-  for f in "$ZENO_ROOT/.env" "$RUNNER_DIR/.env"; do   # gitignored secrets only; tracked files are covered by porcelain
-    [[ -f $f ]] && printf '%s\tSHA %s\n' "$f" "$(sha256sum "$f" | cut -c1-16)"
-  done
+  f=$ZENO_ROOT/.env   # the gitignored secrets file (the runner's own .env is operator-tuned between ticks)
+  [[ -f $f ]] && printf '%s\tSHA %s\n' "$f" "$(sha256sum "$f" | cut -c1-16)"
   return 0
 }
 
