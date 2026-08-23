@@ -55,6 +55,13 @@ LOOKUP_PROVIDERS: dict[str, str] = {
     "atlas_source_product": "django_atlas.services.lookup_provider",
 }
 
+# Enrichment bus adapters (plan 06): target_module -> dotted module path, imported lazily by
+# django_enrichment's registry. `atlas` serves the duplicate_in_pim acceptance queue (SpawnRule
+# `atlas-duplicate-in-pim` -> proposal -> accepted link on SourceProduct.real_product).
+ENRICHMENT_ADAPTERS: dict[str, str] = {
+    "atlas": "django_atlas.services.enrichment_adapter",
+}
+
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
 QMS_TYPE = "XRAY"
