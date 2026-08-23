@@ -115,7 +115,12 @@ journal() {
 # --- Repos / git ---------------------------------------------------------------
 
 plan_repos() { plan_header "$1" REPOS | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*\/*$//' | grep -v '^$'; }
-repo_dir() { [[ $1 == . ]] && echo "$ZENO_ROOT" || echo "$ZENO_ROOT/$1"; }
+# REPOS entries are `<group>/<repo>` under repos/ (the `repos/` prefix is implicit, as in the plan standard);
+# `.` = zeno itself. A path that exists directly under the root is accepted too (mock suite).
+repo_dir() {
+  [[ $1 == . ]] && { echo "$ZENO_ROOT"; return; }
+  if [[ -d $ZENO_ROOT/repos/$1/.git ]]; then echo "$ZENO_ROOT/repos/$1"; else echo "$ZENO_ROOT/$1"; fi
+}
 
 ensure_branch() { # dir branch — checkout, create from BASE_BRANCH when missing
   local dir=$1 br=$2

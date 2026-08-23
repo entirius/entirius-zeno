@@ -369,6 +369,16 @@ scenario_cr_moved_tag() {
   teardown
 }
 
+scenario_repos_layout() { # real layout: REPOS: <group>/<repo> resolves under repos/
+  setup
+  mkdir -p "$ZENO_ROOT/repos/django"; mv "$ZENO_ROOT/repo" "$ZENO_ROOT/repos/django/entirius-django-x"
+  sed -i 's|^REPOS:.*|REPOS: django/entirius-django-x|; s|^test -f repo/IMPL_OK|test -f repos/django/entirius-django-x/IMPL_OK|' "$PLANS_DIR/01-a.md"
+  run_runner
+  assert_eq "repos-layout: ready" ready "$(status_of 01-a.md)"
+  assert_true "repos-layout: branch in repos/django/…" git -C "$ZENO_ROOT/repos/django/entirius-django-x" show-ref -q refs/heads/feature/mock
+  teardown
+}
+
 main() {
   command -v jq >/dev/null || { echo "jq missing"; exit 1; }
   command -v flock >/dev/null || { echo "flock missing"; exit 1; }
@@ -383,5 +393,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag)
+SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout)
 main "$@"
