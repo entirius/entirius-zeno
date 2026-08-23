@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # make runner-init — role profiles in ~/.claude-runner/<role> (coder, reviewer, triage). Idempotent.
-# Copies nothing from ~/.claude except, on RUNNER_SHARE_LOGIN=1, the OAuth credentials file (roles need auth;
-# alternative: ANTHROPIC_API_KEY in scripts/dev-runner/.env).
+# Copies nothing from ~/.claude; on RUNNER_SHARE_LOGIN=1 the OAuth credentials file is SYMLINKED into each
+# profile (roles need auth; alternative: ANTHROPIC_API_KEY in scripts/dev-runner/.env).
 set -euo pipefail
 RUNNER_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=/dev/null
@@ -31,8 +31,9 @@ write_profile() { # role — merges over an existing settings.json (operator add
   }')
   if [[ -f $dir/settings.json ]]; then jq -s '.[0] * .[1]' "$dir/settings.json" <(echo "$gen") > "$dir/settings.json.tmp" && mv "$dir/settings.json.tmp" "$dir/settings.json"
   else echo "$gen" > "$dir/settings.json"; fi
+  # Symlink, not copy: OAuth refresh tokens rotate — a stale copy cannot refresh (seen on the first night).
   if [[ ${RUNNER_SHARE_LOGIN:-0} == 1 && -f $HOME/.claude/.credentials.json ]]; then
-    install -m 600 "$HOME/.claude/.credentials.json" "$dir/.credentials.json"
+    ln -sf "$HOME/.claude/.credentials.json" "$dir/.credentials.json"
   fi
   echo "profile $1: $dir"
 }

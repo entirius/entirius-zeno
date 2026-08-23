@@ -28,8 +28,9 @@ pick plan (first in-dev = stale claim, else lowest to-dev with DEPENDS ready)
 ## Setup
 
 1. `cp scripts/dev-runner/.env.example scripts/dev-runner/.env` — models, caps, `CLAUDE_CLI_PIN`.
-2. Auth for roles: `ANTHROPIC_API_KEY` in `.env`, or `RUNNER_SHARE_LOGIN=1 make runner-init` (copies the
-   operator's OAuth credentials file into each profile — nothing else is copied from `~/.claude`).
+2. Auth for roles: `ANTHROPIC_API_KEY` in `.env`, or `RUNNER_SHARE_LOGIN=1 make runner-init` (symlinks the
+   operator's OAuth credentials file into each profile — a copy goes stale when the refresh token rotates;
+   nothing else is shared from `~/.claude`).
 3. `make runner-test` green → live smoke `scripts/dev-runner/tests/live-smoke.sh` (~$2: caps 1/0.5/0.5) → remove `STOP`.
 4. Stack: `make dev` up, `make seed` baseline (gates run on the live stack).
 
