@@ -15,7 +15,7 @@ load_env() {
   : "${STOP_FILE:=$RUNNER_DIR/STOP}" "${GATES_DIR:=$RUNNER_DIR/gates}"
   : "${BASE_BRANCH:=develop}" "${MAX_ATTEMPTS:=3}" "${MAX_REVIEW_ROUNDS:=1}"
   : "${CODER_CAP_USD:=15}" "${REVIEWER_CAP_USD:=3}" "${TRIAGE_CAP_USD:=1}" "${DAILY_CAP_USD:=60}"
-  : "${ROLE_TIMEOUT:=3600}" "${SENTINEL_GRACE:=20}" "${POLL_STEP:=2}"
+  : "${ROLE_TIMEOUT:=3600}" "${SENTINEL_GRACE:=90}" "${POLL_STEP:=2}"
   : "${MOCK_ROLES:=0}" "${DRY:=0}" "${PROFILES_DIR:=$HOME/.claude-runner}"
   : "${CODER_MODEL:=claude-opus-5}" "${REVIEWER_MODEL:=claude-fable-5}" "${TRIAGE_MODEL:=claude-fable-5}"
   : "${GITLEAKS_CONFIG:=$ZENO_ROOT/.gitleaks.toml}"
@@ -322,7 +322,7 @@ scope_snapshot() {
     git -C "$d" status --porcelain --untracked-files=all | sed "s|^|$d\t|"
     printf '%s\tHEAD %s\n' "$d" "$(git -C "$d" rev-parse HEAD 2>/dev/null)"
   done < <(all_repo_dirs)
-  for f in "$ZENO_ROOT/.env" "$ZENO_ROOT/docker/settings_local.py" "$RUNNER_DIR/.env"; do
+  for f in "$ZENO_ROOT/.env" "$RUNNER_DIR/.env"; do   # gitignored secrets only; tracked files are covered by porcelain
     [[ -f $f ]] && printf '%s\tSHA %s\n' "$f" "$(sha256sum "$f" | cut -c1-16)"
   done
   return 0

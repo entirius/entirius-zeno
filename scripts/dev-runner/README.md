@@ -47,8 +47,8 @@ no `..`/absolute `REPOS`. `STATUS:` in the plan file is authoritative; the `00-R
 - Push: `pre-push` hook exiting 1 in every `REPOS` repo while claimed (operator hook restored, also on
   crash via trap) + profile deny `Bash(git push:*)`/`git remote`/`git config`. The hard layer stays the
   operator's `remote.origin.pushurl=DISABLED` on every repo the runner may touch — keep it set.
-- Scope: snapshot at claim (porcelain + HEAD of every `repos/*/*` and zeno root, hashes of `.env`,
-  `docker/settings_local.py`, runner `.env`); any change outside `REPOS` after a role → `parked`; missing
+- Scope: snapshot at claim (porcelain + HEAD of every `repos/*/*` and zeno root, hashes of the gitignored
+  `.env` and runner `.env`); any change outside `REPOS` after a role → `parked`; missing
   snapshot = fail closed. Invisible: paths outside those repos (`$HOME`, `/tmp`, `todo/`, `.runner/`) —
   profile deny covers `~/.ssh`, `~/.claude*`, `.env`, `scripts/dev-runner/`.
 - Plan integrity: headers + gate are read from a copy taken at claim; the live plan must hash the same
