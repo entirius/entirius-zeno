@@ -62,6 +62,7 @@ cr_panel() {
   local dim out
   for dim in "${CR_DIMS[@]}"; do
     out=$HAND/cr-$dim-findings.json
+    jq -e '.findings | type == "array"' "$out" >/dev/null 2>&1 && continue   # dimension done on a previous tick
     cr_dimension "$dim" 1 > "$out" || cr_dimension "$dim" 2 > "$out" || { escalate "checkpoint inconclusive: reviewer '$dim' failed twice"; return 1; }
     budget_ok "$HAND" "$PLAN_CAP_USD" || { escalate "budget exceeded (cap \$$PLAN_CAP_USD)"; return 1; }
   done
