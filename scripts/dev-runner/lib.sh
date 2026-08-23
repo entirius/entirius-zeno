@@ -173,9 +173,11 @@ tag_done() {
 # Child runs in its own session (setsid) so a kill takes the whole process group — a timed-out
 # `claude -p` must not leave tool children writing into the repos. WATCHDOG_STDERR separates stderr
 # (a live role's stdout is the JSON result and must stay parsable).
+# WATCHDOG_STDIN feeds the child's stdin from a file (prompts go through stdin, never argv: a checkpoint
+# diff is 300 KB+ and exec fails with "Argument list too long" past MAX_ARG_STRLEN).
 run_with_watchdog() { # timeout sentinel outfile cmd...
   local timeout=$1 sentinel=$2 out=$3 rc=0 t=0 pid; shift 3
-  setsid "$@" </dev/null >"$out" 2>"${WATCHDOG_STDERR:-$out}" 9>&- & pid=$!   # 9>&- : never inherit the flock
+  setsid "$@" <"${WATCHDOG_STDIN:-/dev/null}" >"$out" 2>"${WATCHDOG_STDERR:-$out}" 9>&- & pid=$!   # 9>&- : never inherit the flock
   while kill -0 "$pid" 2>/dev/null; do
     if [[ -n $sentinel && -e $sentinel ]]; then
       sleep "$SENTINEL_GRACE"
@@ -216,7 +218,7 @@ run_role() { # role attempt-dir cap steer?
 model_for_role() { case $1 in coder) echo "$CODER_MODEL" ;; reviewer) echo "$REVIEWER_MODEL" ;; triage) echo "$TRIAGE_MODEL" ;; esac; }
 
 # Real claude -p in the role's own profile (never the operator's ~/.claude), from the zeno root, under the
-# watchdog; sentinel = <workdir>/.runner-done. Prompt via file (argv limit), cap via --max-budget-usd.
+# watchdog; sentinel = <workdir>/.runner-done. Prompt via STDIN (argv limit), cap via --max-budget-usd.
 # No parsable JSON result (crash, premature sentinel, stderr noise) = failure, never a silent success.
 run_role_live() { # role attempt-dir cap steer [prompt-file]  (prompt-file = pre-built prompt, e.g. CR panel)
   local role=$1 hand=$2 cap=$3 steer=$4 rc=0 model dir profile=$PROFILES_DIR/$1
@@ -226,9 +228,10 @@ run_role_live() { # role attempt-dir cap steer [prompt-file]  (prompt-file = pre
   if [[ -n ${5:-} ]]; then [[ $5 == "$hand/$role-prompt.md" ]] || cp "$5" "$hand/$role-prompt.md"
   else build_prompt "$role" "$hand" "$steer" > "$hand/$role-prompt.md"; fi
   rm -f "$dir/.runner-done"
-  WATCHDOG_STDERR=$hand/$role-stderr.log run_with_watchdog "$ROLE_TIMEOUT" "$dir/.runner-done" "$hand/$role-out.json" \
+  WATCHDOG_STDIN=$hand/$role-prompt.md WATCHDOG_STDERR=$hand/$role-stderr.log \
+    run_with_watchdog "$ROLE_TIMEOUT" "$dir/.runner-done" "$hand/$role-out.json" \
     env -C "$ZENO_ROOT" CLAUDE_CONFIG_DIR="$profile" ${ANTHROPIC_API_KEY:+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"} \
-      claude -p "$(cat "$hand/$role-prompt.md")" --output-format json --max-budget-usd "$cap" \
+      claude -p --output-format json --max-budget-usd "$cap" \
       ${model:+--model "$model"} --permission-mode bypassPermissions || rc=$?
   rm -f "$dir/.runner-done"
   jq -e 'type == "object"' "$hand/$role-out.json" >/dev/null 2>&1 || { log "$role: no parsable result — failure"; return "${rc/#0/1}"; }

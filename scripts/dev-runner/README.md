@@ -75,6 +75,8 @@ regressions, `prompts/cr/panel-base.md`); a reviewer failing twice = inconclusiv
 checkpoint's `DEPENDS` gains it (the checkpoint re-runs after the FIX is `ready`); majors → `BG-<id>-checkpoint.md`
 (no dependency). `FIX-`/`BG-` plans run after numbered plans, ordered by creation. Checkpoints need no commits.
 
+Prompts reach `claude -p` on stdin (a checkpoint diff exceeds the argv limit); the live smoke proves the path.
+
 ## State
 
 `.runner/handoff/<topic>-<id>/attempt-N/` (prompts, out.json, stderr, gate.log, patches, findings, DECISION,

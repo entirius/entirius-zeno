@@ -6,7 +6,9 @@
 # shellcheck disable=SC2153  # HAND/PLAN_* are runner.sh globals
 
 CR_DIMS=(contract tests regressions)
-: "${CR_SPLIT_BYTES:=409600}"   # total diff > 400 KB → one reviewer call per repo, findings merged
+: "${CR_SPLIT_BYTES:=150000}"   # total diff > 150 KB → one reviewer call per repo, findings merged
+: "${CR_CHUNK_BYTES:=150000}"   # a single repo diff above this is reviewed in chunks (a 200 KB prompt ≈ $2 to read)
+: "${CR_CAP_USD:=6}"            # per panel call; a reviewer must read the whole chunk before it can answer
 
 run_checkpoint() {
   local from crit majors
@@ -65,15 +67,28 @@ cr_panel() {
   done
 }
 
-cr_dimension() { # dim try → merged findings JSON on stdout (one call, or per repo when the diff is large)
+cr_dimension() { # dim try → merged findings JSON on stdout (one call, per repo, or per chunk when large)
   local total=0 f parts=() p
   for f in "$HAND"/cr-*.diff; do total=$((total + $(stat -c %s "$f"))); done
   if (( total > CR_SPLIT_BYTES )); then
-    for f in "$HAND"/cr-*.diff; do p=$(cr_reviewer_call "$1" "$2-$(basename "$f" .diff)" "$f") || return 1; parts+=("$p"); done
+    for f in $(cr_chunks); do p=$(cr_reviewer_call "$1" "$2-$(basename "$f" .diff)" "$f") || return 1; parts+=("$p"); done
   else
     p=$(cr_reviewer_call "$1" "$2" "$HAND"/cr-*.diff) || return 1; parts+=("$p")
   fi
   printf '%s\n' "${parts[@]}" | jq -cs '{findings: [.[].findings[]?]}'
+}
+
+# Split every repo diff above CR_CHUNK_BYTES on file boundaries (`diff --git` headers) into cr-<repo>.pNN.diff.
+cr_chunks() {
+  local f
+  for f in "$HAND"/cr-*.diff; do
+    [[ $f == *.p[0-9][0-9].diff ]] && continue
+    if (( $(stat -c %s "$f") <= CR_CHUNK_BYTES )); then echo "$f"; continue; fi
+    [[ -f ${f%.diff}.p00.diff ]] || awk -v max="$CR_CHUNK_BYTES" -v base="${f%.diff}" '
+      /^diff --git / && size > 0 && size + length($0) > max { close(out); n++; size = 0 }
+      { if (size == 0) out = sprintf("%s.p%02d.diff", base, n); print > out; size += length($0) + 1 }' "$f"
+    ls "${f%.diff}".p[0-9][0-9].diff
+  done
 }
 
 # One reviewer-profile call through run_role_live (profile check, watchdog, is_error, cost booking).
@@ -82,8 +97,8 @@ cr_reviewer_call() { # dim call-id diff-files... → findings JSON on stdout (rc
   mkdir -p "$hand"
   cr_prompt "$dim" "$@" > "$hand/reviewer-prompt.md"
   if [[ $MOCK_ROLES == 1 ]]; then cr_mock_result "$hand" || rc=$?
-  else run_role_live reviewer "$hand" "$REVIEWER_CAP_USD" "" "$hand/reviewer-prompt.md" || rc=$?; fi
-  record_cost reviewer "$hand" "$REVIEWER_CAP_USD"
+  else run_role_live reviewer "$hand" "$CR_CAP_USD" "" "$hand/reviewer-prompt.md" || rc=$?; fi
+  record_cost reviewer "$hand" "$CR_CAP_USD"
   (( rc == 0 )) || return 1
   jq -r '.result // empty' "$hand/reviewer-out.json" | cr_parse_findings
 }
