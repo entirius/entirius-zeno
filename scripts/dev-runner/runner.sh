@@ -76,7 +76,7 @@ claim_repos() {
     record_base "$dir"
     install_push_guard "$dir"
   done < <(plan_repos "$PLAN_FILE")
-  [[ -f $HAND/scope-base.txt ]] || scope_snapshot > "$HAND/scope-base.txt"
+  scope_snapshot > "$HAND/scope-base.txt"   # re-taken at every claim: operator work between ticks is theirs
 }
 
 release_repos() {
@@ -93,26 +93,37 @@ guard_scope() { # → 0 clean; escalates and returns 1
 attempt_count() { find "$HAND" -maxdepth 1 -name 'attempt-*' -type d 2>/dev/null | wc -l; }
 attempt_n() { basename "$1" | cut -d- -f2; }
 
-# A crashed attempt (dir without coder.rc) is resumed in place — no duplicate attempt dir.
+# An unfinished attempt is resumed in place — no duplicate attempt dir, no repeated coder run:
+# no coder.rc → coder; coder.rc=0 and no gate.rc → gate; gate.rc=0 → review.
 next_attempt_dir() {
   local n; n=$(attempt_count)
-  if (( n > 0 )) && [[ ! -f $HAND/attempt-$n/coder.rc ]]; then echo "$HAND/attempt-$n"; return 0; fi
+  if (( n > 0 )) && [[ $(attempt_stage "$HAND/attempt-$n") != finished ]]; then echo "$HAND/attempt-$n"; return 0; fi
   echo "$HAND/attempt-$((n + 1))"
 }
 
+attempt_stage() { # attempt-dir → coder | gate | review | finished
+  [[ -f $1/coder.rc ]] || { echo coder; return; }
+  [[ $(cat "$1/coder.rc") == 0 ]] || { echo finished; return; }
+  [[ -f $1/gate.rc ]] || { echo gate; return; }
+  [[ $(cat "$1/gate.rc") == 0 ]] && echo review || echo finished
+}
+
 attempt_loop() {
-  local steer attempt
+  local steer attempt stage
   steer=$(cat "$HAND/steer.txt" 2>/dev/null || true)
   while :; do
     attempt=$(next_attempt_dir)
     (( $(attempt_n "$attempt") <= MAX_ATTEMPTS )) || break
-    mkdir -p "$attempt"
-    coder_attempt "$attempt" "$steer" || return 0
-    if run_gate "$PLAN_FILE" "$attempt"; then review_and_finish "$attempt"; return 0; fi
+    mkdir -p "$attempt"; stage=$(attempt_stage "$attempt")
+    [[ $stage == coder ]] && { coder_attempt "$attempt" "$steer" || return 0; stage=gate; }
+    [[ $stage != review ]] && { log "resuming at stage: $stage" >/dev/null; gate_attempt "$attempt" && stage=review; }
+    [[ $stage == review ]] && { review_and_finish "$attempt"; return 0; }
     steer=$(handle_red_gate "$attempt") || return 0
   done
   escalate "attempts exhausted ($MAX_ATTEMPTS) — gate red"
 }
+
+gate_attempt() { local rc=0; run_gate "$PLAN_FILE" "$1" || rc=$?; echo "$rc" > "$1/gate.rc"; return "$rc"; }
 
 # 0 = coder OK (commits + budget); hard failure escalates and returns 1. Cost is always recorded.
 coder_attempt() { # attempt-dir steer
@@ -179,9 +190,9 @@ review_fix_round() { # attempt-dir
   local findings
   findings=$(jq -c '.findings' "$1/reviewer-findings.json" 2>/dev/null || echo '[]')
   log "review: critical findings — one fix round for the coder"
-  rm -f "$1/coder.rc"
+  rm -f "$1/coder.rc" "$1/gate.rc"
   coder_attempt "$1" "Fix the critical findings from code review (do not widen the scope): $findings" || return 1
-  run_gate "$PLAN_FILE" "$1" || { escalate "gate red after the review fix"; return 1; }
+  gate_attempt "$1" || { escalate "gate red after the review fix"; return 1; }
 }
 
 count_critical() { jq '[.findings[]? | select(.severity == "critical")] | length' "$1/reviewer-findings.json" 2>/dev/null || echo 0; }

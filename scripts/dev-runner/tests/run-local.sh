@@ -379,6 +379,31 @@ scenario_repos_layout() { # real layout: REPOS: <group>/<repo> resolves under re
   teardown
 }
 
+scenario_resume_at_gate() { # coder done (rc 0, commits) but the runner died before the gate → no second coder run
+  setup
+  run_runner
+  assert_eq "resume-gate: green run ready" ready "$(status_of 01-a.md)"
+  sed -i 's/^STATUS: to-dev/STATUS: in-dev/' "$PLANS_DIR/02-b.md"
+  mkdir -p "$STATE_DIR/handoff/mock-02/attempt-1"; echo 0 > "$STATE_DIR/handoff/mock-02/attempt-1/coder.rc"
+  cp "$PLANS_DIR/02-b.md" "$STATE_DIR/handoff/mock-02/plan.md"; sha256sum "$PLANS_DIR/02-b.md" | cut -d' ' -f1 > "$STATE_DIR/handoff/mock-02/plan.sha"
+  ( cd "$ZENO_ROOT/repo" && date +%s%N > IMPL_OK && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: by hand" )
+  MOCK_CODER_MODE=bad run_runner   # a coder run now would break the gate — it must not run
+  assert_eq "resume-gate: ready without a coder run" ready "$(status_of 02-b.md)"
+  assert_eq "resume-gate: no coder cost booked" 0 "$(grep -c '^coder' "$STATE_DIR"/handoff/archive/mock-02-*/costs.log)"
+  teardown
+}
+
+scenario_operator_between_ticks() { # operator edits an unrelated repo between ticks → not a violation
+  setup
+  mkdir -p "$ZENO_ROOT/repos/docs/site"; git init -q -b master "$ZENO_ROOT/repos/docs/site"
+  ( cd "$ZENO_ROOT/repos/docs/site" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  run_runner
+  echo operator-edit > "$ZENO_ROOT/repos/docs/site/b"
+  run_runner   # plan 02 claims with a fresh baseline
+  assert_eq "between-ticks: 02 ready despite operator dirt elsewhere" ready "$(status_of 02-b.md)"
+  teardown
+}
+
 main() {
   command -v jq >/dev/null || { echo "jq missing"; exit 1; }
   command -v flock >/dev/null || { echo "flock missing"; exit 1; }
@@ -393,5 +418,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout)
+SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks)
 main "$@"
