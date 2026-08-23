@@ -172,7 +172,7 @@ review_and_finish() { # attempt-dir
 
 # Reviewer run + contract check: no parsable findings.json → one re-prompt, then escalate (never "clean").
 review_once() { # attempt-dir → 0 findings valid; escalates otherwise
-  local try steer=""
+  local try steer="" f
   for try in 1 2; do
     local rc=0; run_role reviewer "$1" "$REVIEWER_CAP_USD" "$steer" || rc=$?
     record_cost reviewer "$1" "$REVIEWER_CAP_USD"
@@ -181,6 +181,7 @@ review_once() { # attempt-dir → 0 findings valid; escalates otherwise
     budget_ok "$HAND" "$PLAN_CAP_USD" || { escalate "budget exceeded (cap \$$PLAN_CAP_USD)"; return 1; }
     findings_valid "$1" && return 0
     log "reviewer: no findings.json — re-prompting (try $try)"
+    for f in out.json stderr.log prompt.md; do [[ -f $1/reviewer-$f ]] && mv "$1/reviewer-$f" "$1/reviewer-try$try-$f"; done
     steer="Your previous run ended WITHOUT writing findings.json. Finish the review now and write the file (empty list if clean)."
   done
   escalate "reviewer returned no findings section twice — not counted as clean"; return 1
