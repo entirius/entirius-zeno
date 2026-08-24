@@ -17,8 +17,10 @@ for r in "${repos[@]}"; do
 done
 [[ -n ${MOCK_CODER_STRAY:-} ]] && echo stray > "$MOCK_CODER_STRAY"
 [[ -n ${MOCK_CODER_TAMPER:-} ]] && echo "# tampered by the coder" >> "$MOCK_CODER_TAMPER"
-if [[ ${MOCK_CODER_LEAK:-0} == 1 ]]; then   # fake GitHub PAT (strict regex rule) → gitleaks must park the plan
-  echo "token = ghp_GENERATED_AT_RUNTIME_NOT_A_SECRET" > "${repos[0]}/leak.cfg"
+if [[ ${MOCK_CODER_LEAK:-0} == 1 ]]; then
+  # A PAT-shaped value gitleaks must catch — GENERATED, never a literal: a literal in this file would trip
+  # every scan of this repo (and GitHub's own secret scanning) forever, for a string that is not a secret.
+  printf 'token = ghp_%s\n' "$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 36)" > "${repos[0]}/leak.cfg"
   git -C "${repos[0]}" add -A && git -C "${repos[0]}" -c user.name=coder-stub -c user.email=coder@dev-runner commit -qm "chore: config"
 fi
 echo "{\"total_cost_usd\": ${MOCK_CODER_COST:-0.01}}" > "$dir/cost.json"
