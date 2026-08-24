@@ -95,6 +95,7 @@ was embedded with a different model than the one configured now.
 | Suite red after incremental reruns | state drift — run the canonical `make seed && make bdd` |
 | Stack wedged beyond repair | `make clean` (drops volumes) → `make up` → `make seed` |
 | `@lookup` scenarios or `lookup-eval` find nothing | fingerprints missing — `lookup_doctor`, then `lookup_backfill` (a plain `make dev` does not backfill) |
+| One fixture photo returns 19 `image_near_exact` hits | expected, not a bug — the lookup fixtures are generated shapes (3 shapes × a solid colour on white), and pHash is a grayscale DCT, so colour-only variants collapse onto the same hash. That is why `image_near_exact` scores only 10 and the text legs decide. Real catalog photography is far more selective; do not tune thresholds against this artefact |
 | Image search returns text-only hits + a warning | the `embed` service is down — `make embed`; the engine degrades on purpose instead of failing |
 | Module tests fail with "cannot resolve host" | containers had no DNS; `docker-compose.dev.yml` pins `DOCKER_DNS_1/2` (default 1.1.1.1/8.8.8.8) |
 
