@@ -50,10 +50,6 @@ LOOKUP_IMAGE_ENABLED = True
 LOOKUP_BLOCK_PRIVATE_HOSTS = False
 # kind -> provider module (plan 03). Each entry is imported lazily by django_lookup's registry,
 # so a missing module only breaks that kind — the rest of the stack boots.
-# The PIM create hook is opt-in per deployment (django_pim defaults it to False); the harness wants it on so
-# the @lookup BDD scenarios exercise `possible_duplicates`.
-PIM_LOOKUP_ON_CREATE = True
-
 LOOKUP_PROVIDERS: dict[str, str] = {
     "pim_product": "django_pim.services.lookup_provider",
     "atlas_source_product": "django_atlas.services.lookup_provider",
