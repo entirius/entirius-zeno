@@ -20,6 +20,7 @@ SERVICES = [
     ("docs", 4321, "Docs portal", "/"),
     ("docs-alt", 4321, "Docs portal (branch)", "/"),
     ("www", 3000, "entirius.com (www)", "/"),
+    ("embed", 7997, "Embedding service", "/docs"),
     ("rabbitmq", 15672, "RabbitMQ", "/"),
 ]
 

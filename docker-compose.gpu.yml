@@ -1,0 +1,15 @@
+# GPU variant of the embed service — layered by `make embed` when EMBED_GPU=1.
+# Compose cannot gate a `deploy` block by env var, hence a separate file.
+# Requires the GPU to be visible to Docker through CDI (/etc/cdi/nvidia.yaml — see AGENTS.md gotchas).
+
+services:
+  embed:
+    image: michaelf34/infinity:0.0.77
+    command: ["v2", "--model-id", "${EMBED_MODEL:-google/siglip-so400m-patch14-384}", "--port", "7997", "--engine", "torch", "--device", "cuda", "--no-trust-remote-code"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids: ["nvidia.com/gpu=all"]
+              capabilities: [gpu]

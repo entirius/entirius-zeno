@@ -28,4 +28,6 @@ __pycache__/
 backups/
 test-results/
 scripts/dev-runner/STOP
+scripts/dev-runner/.env
 .runner/
+node_modules/

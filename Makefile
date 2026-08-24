@@ -1,4 +1,4 @@
-.PHONY: help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -9,7 +9,11 @@ COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROFILES = --profile infra --profile service
 # pwa/cms are opt-in (started by their own targets), but teardown and introspection
 # must always see the whole stack — otherwise frontends outlive `down`/`clean`.
-ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile docs --profile www
+ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile docs --profile www --profile embed
+# Embedding service: EMBED_GPU=1 layers the CUDA + GPU (CDI) override on the dev compose.
+# Auto-detected from the CDI spec; .env or the command line override it.
+EMBED_GPU ?= $(shell test -f /etc/cdi/nvidia.yaml && echo 1 || echo 0)
+EMBED_COMPOSE = $(COMPOSE_DEV) $(if $(filter 1,$(EMBED_GPU)),-f docker-compose.gpu.yml)
 SERVICE ?= entirius-service-volkanos
 TESTS_PATH ?= ./repos/tests
 DOCS_PATH ?= ./repos/docs
@@ -86,6 +90,9 @@ dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 		{ echo "repos/services/$(SERVICE) is empty - run 'make clone' first"; exit 1; }
 	@$(call REQUIRE_IMAGE)
 	$(COMPOSE_DEV) $(PROFILES) up -d
+# `up` without the embed profile would leave an already-running embed orphaned/stopped on
+# the next recreate — keep it in the stack when it is up (the lookup module needs it).
+	@docker ps --format '{{.Names}}' | grep -q -- '-embed-1$$' && $(MAKE) --no-print-directory embed >/dev/null || true
 # Best-effort: right after start the venv may still be syncing, so the dashboard can
 # report stale provenance — rerun `make dashboard` once the stack settles.
 	@python3 scripts/dashboard.py 2>/dev/null || true
@@ -101,6 +108,20 @@ link:  ## Re-link mounted module repos in service AND worker without restarting 
 			done'; \
 	done
 	@echo "NOTE: celery does not autoreload — restart the worker to pick up task-code changes"
+
+embed:  ## Start the embedding service (profile embed; EMBED_GPU=0 for CPU) — first start downloads the model
+	@$(EMBED_COMPOSE) $(PROFILES) --profile embed up -d embed
+	@$(MAKE) --no-print-directory urls
+
+# Runs the module's own suite with the service venv (dev mode: repos/django/ is mounted at
+# /entirius/django). -p no:cacheprovider: container is root, the repo is a bind mount.
+lookup-eval:  ## Measure lookup precision/recall on the labelled pairs of the test package (fresh `make seed` first)
+	@$(COMPOSE) $(PROFILES) exec -T service python manage.py lookup_eval \
+		--pairs /entirius/test-package/fixtures/lookup/labelled_pairs.csv $(LOOKUP_EVAL_ARGS)
+
+module-test:  ## Run a mounted module's tests in the service container: make module-test MODULE=entirius-django-x
+	@echo "$(MODULE)" | grep -Eq '^[A-Za-z0-9._-]+$$' || { echo "ERROR: MODULE is required (e.g. make module-test MODULE=entirius-django-lookup)"; exit 1; }
+	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
 
 down:  ## Stop everything
 	$(COMPOSE_DEV) $(ALL_PROFILES) down
@@ -131,6 +152,8 @@ urls:  ## URLs and ports of running services
 	[ -n "$$p" ] && { echo "  docs-alt     http://localhost:$$p  (branch: $${DOCS_ALT_BRANCH:-?})"; up=1; }; \
 	p=$$($(COMPOSE) --profile www port www 3000 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  www          http://localhost:$$p  (branch: $(WWW_BRANCH))"; up=1; }; \
+	p=$$($(COMPOSE) --profile embed port embed 7997 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  embed        http://localhost:$$p  (embeddings; /docs, /models)"; up=1; }; \
 	p=$$($(COMPOSE) port db 5432 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  postgres     localhost:$$p  ($${POSTGRES_USER:-entirius}/$${POSTGRES_PASSWORD:-entirius-dev}, db: $${POSTGRES_DB:-entirius})"; up=1; }; \
 	p=$$($(COMPOSE) port redis 6379 2>/dev/null | cut -d: -f2); \
@@ -211,8 +234,32 @@ e2e:  ## Run Playwright e2e (storefront + CMS) against the running frontends
 	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100}
 
-check:  ## Verify canonical .gitleaks.toml is linked
-	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
+# --- dev-runner (scripts/dev-runner): executes todo/<topic>/dev-plans one plan per tick ---
+PLANS ?= todo/product-lookup-dedup/dev-plans
+
+runner-once:  ## One runner tick on PLANS (default: lookup dev-plans)
+	@scripts/dev-runner/runner.sh --once --plans $(PLANS)
+
+runner-dry:  ## Dry run: pick the next plan, change nothing
+	@scripts/dev-runner/runner.sh --once --dry-run --plans $(PLANS)
+
+runner-test:  ## Runner mock suite (zero tokens)
+	@scripts/dev-runner/tests/run-local.sh
+
+runner-init:  ## Create role profiles ~/.claude-runner/{coder,reviewer,triage} (idempotent)
+	@scripts/dev-runner/init.sh
+
+runner-loop:  ## Tick every 5 min until scripts/dev-runner/STOP exists (sleep inhibited)
+	@scripts/dev-runner/loop.sh $(PLANS)
+
+runner-status:  ## Plans table, journal tail, today's spend
+	@scripts/dev-runner/status.sh $(PLANS)
+
+runner-stop:  ## Stop the runner after the current tick
+	@touch scripts/dev-runner/STOP && echo "STOP set — remove scripts/dev-runner/STOP to resume"
+
+check:  ## Verify the canonical .gitleaks.toml is linked here and in every mounted clone
+	@sh scripts/check-gitleaks-links.sh
 
 clean:  ## Remove containers and volumes
 	$(COMPOSE_DEV) $(ALL_PROFILES) down -v

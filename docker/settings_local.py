@@ -34,6 +34,34 @@ SUPPLIER_BLOCK_PRIVATE_HOSTS = False
 # Same escape hatch for django_atlas source feeds (its own url_guard).
 ATLAS_BLOCK_PRIVATE_HOSTS = False
 
+# Lookup module (django_lookup): image embeddings from the in-network `embed` container
+# (make embed). Model/dim mirror .env — the HalfVectorField dimension must match EMBED_DIM.
+LOOKUP_EMBEDDING = {
+    "provider": "http",
+    "url": "http://embed:7997/embeddings",
+    "model": config("EMBED_MODEL", default="google/siglip-so400m-patch14-384"),
+    "dim": config("EMBED_DIM", default=1152, cast=int),
+    "timeout_s": 10,
+}
+LOOKUP_EMBED_ALLOWED_HOSTS = ["embed"]
+LOOKUP_IMAGE_ENABLED = True
+# Dev-only: atlas source images live on the in-network `fixtures` host, which django_lookup's own
+# SSRF guard blocks by default (same escape hatch as ATLAS_BLOCK_PRIVATE_HOSTS above).
+LOOKUP_BLOCK_PRIVATE_HOSTS = False
+# kind -> provider module (plan 03). Each entry is imported lazily by django_lookup's registry,
+# so a missing module only breaks that kind — the rest of the stack boots.
+LOOKUP_PROVIDERS: dict[str, str] = {
+    "pim_product": "django_pim.services.lookup_provider",
+    "atlas_source_product": "django_atlas.services.lookup_provider",
+}
+
+# Enrichment bus adapters (plan 06): target_module -> dotted module path, imported lazily by
+# django_enrichment's registry. `atlas` serves the duplicate_in_pim acceptance queue (SpawnRule
+# `atlas-duplicate-in-pim` -> proposal -> accepted link on SourceProduct.real_product).
+ENRICHMENT_ADAPTERS: dict[str, str] = {
+    "atlas": "django_atlas.services.enrichment_adapter",
+}
+
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
 QMS_TYPE = "XRAY"
@@ -63,6 +91,8 @@ LOCAL_APPS = [
     # crash-looping on ModuleNotFoundError.
     # atlas before pricefighter: pricefighter services import django_atlas.
     *(m for m in ("django_atlas", "django_pricefighter") if importlib.util.find_spec(m)),
+    # lookup (private, plan 02): fingerprints over PIM + atlas; providers wired by plan 03.
+    *(m for m in ("django_lookup",) if importlib.util.find_spec(m)),
     "django_pim_csv",
     "django_pim_translator",
     "django_pim_export_to_magento_api",
