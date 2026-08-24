@@ -1,8 +1,15 @@
 # Development overrides — mounts local clones from repos/ for hot reload.
 # Usage: make dev (requires `make clone` first — the mount hides the baked-in service).
 
+# Module suites resolve public hostnames (SSRF-guard tests: example.com, api.voyageai.com). Docker's embedded
+# resolver forwards to the host's nameservers, which are unreachable from the bridge on some setups — point the
+# upstreams at a public resolver instead (service discovery still goes through 127.0.0.11).
+x-dns: &dns
+  dns: ["${DOCKER_DNS_1:-1.1.1.1}", "${DOCKER_DNS_2:-8.8.8.8}"]
+
 services:
   service:
+    <<: *dns
     entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
     command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
     volumes:
@@ -20,6 +27,7 @@ services:
   # command ignores. Own venv volume — sharing service_venv would race two
   # concurrent `uv sync` runs at stack start.
   worker:
+    <<: *dns
     entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
     command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,atlas_default,atlas_images,atlas_results,lookup"]
     volumes:
