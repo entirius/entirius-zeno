@@ -258,8 +258,8 @@ runner-status:  ## Plans table, journal tail, today's spend
 runner-stop:  ## Stop the runner after the current tick
 	@touch scripts/dev-runner/STOP && echo "STOP set — remove scripts/dev-runner/STOP to resume"
 
-check:  ## Verify canonical .gitleaks.toml is linked
-	@grep -q "forbidden-names" .gitleaks.toml 2>/dev/null || { echo "Missing or non-canonical .gitleaks.toml - symlink the config per the internal secret-scanning standard"; exit 1; }
+check:  ## Verify the canonical .gitleaks.toml is linked here and in every mounted clone
+	@sh scripts/check-gitleaks-links.sh
 
 clean:  ## Remove containers and volumes
 	$(COMPOSE_DEV) $(ALL_PROFILES) down -v
