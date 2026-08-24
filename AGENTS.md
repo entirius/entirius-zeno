@@ -49,7 +49,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make seed` | `SEED OK` | ~8-15 min |
 | `make bdd` (fresh seed) | 645 passed / 0 failed / 15 skipped | ~5 min |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
-| `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · recall@50 name-leg 0.99 · recall@20 image-leg 0.34 (SigLIP so400m, measured 2026-08-24) | ~1 min |
+| `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · recall@50 name-leg 0.99 · recall@20 image-leg 0.28-0.34 (SigLIP so400m; the image leg varies run to run — HNSW is approximate, `ef_search` 60 — the text metrics do not; measured 2026-08-24 over three seeds) | ~1 min |
 
 Suppliers-admin, atlas push, atlas merge and `@lookup-oneshot` scenarios are one-shot per database —
 a BDD re-run needs a fresh `make seed`. The lookup numbers are measured, never derived: re-measure after
