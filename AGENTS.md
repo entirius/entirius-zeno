@@ -53,7 +53,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 
 Suppliers-admin, atlas push, atlas merge and `@lookup-oneshot` scenarios are one-shot per database —
 a BDD re-run needs a fresh `make seed`. The lookup numbers are measured, never derived: re-measure after
-any change to scoring, fixtures or the embedding model.
+any change to scoring, fixtures or the embedding model, and keep the order `seed` → `bdd` → `lookup-eval` —
+the `@lookup-oneshot` scenario links one fixture pair, so an eval run after BDD skips it by design.
 
 ## Where errors hide
 
