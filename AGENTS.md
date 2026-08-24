@@ -102,7 +102,7 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 ## Dev-runner
 
 `scripts/dev-runner/` executes `todo/<topic>/dev-plans/` plan-by-plan with fresh `claude -p` roles in
-`~/.claude-runner/<role>` profiles (coder = Opus, reviewer/triage = Fable 5): `make runner-init` · `runner-test`
+`~/.claude-runner/<role>` profiles (models per role in `scripts/dev-runner/.env`; all Opus since 2026-08-24): `make runner-init` · `runner-test`
 (mocks, zero tokens) · `runner-once` / `runner-loop` / `runner-status` / `runner-stop` (`PLANS=<dir>`).
 Script-enforced: no push (hook), write scope = `REPOS:` of the plan, gitleaks before `ready`, per-role/plan/daily
 budgets, watchdog. Local commits only — the operator pushes. Runbook: `scripts/dev-runner/README.md`.
