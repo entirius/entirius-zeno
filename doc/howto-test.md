@@ -76,6 +76,12 @@ docker compose --profile infra --profile service exec -T service python manage.p
 docker compose --profile infra --profile service exec -T service python manage.py lookup_backfill --images
 ```
 
+If the image leg simply misses too much, its depth is three settings — `LOOKUP_HNSW_EF_SEARCH`,
+`LOOKUP_IMAGE_TOP_K`, `LOOKUP_PHASH_MAX_DISTANCE` — set in `docker/settings_local.py`. Ready-made profiles
+and the recall-vs-latency trade-off live in the module's `docs/operations.md` (§Deepening the image search).
+The baseline row in `AGENTS.md` was measured at the defaults, so a run with a deeper profile is a different
+measurement and must be labelled as one.
+
 `lookup_doctor` reports how many fingerprints exist, how many carry hashes and vectors, and whether any row
 was embedded with a different model than the one configured now.
 
