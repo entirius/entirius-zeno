@@ -49,7 +49,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make seed` | `SEED OK` | ~8-15 min |
 | `make bdd` (fresh seed) | 645 passed / 0 failed / 15 skipped | ~5 min |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
-| `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.28-0.34 (SigLIP so400m; the image leg varies run to run — HNSW is approximate, `ef_search` 60 — the text metrics do not; measured 2026-08-24 over three seeds) | ~1 min |
+| `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-08-25 over three fresh seeds — every metric above, the image leg included, came back identical on all three) | ~1 min |
 
 Suppliers-admin, atlas push, atlas merge and `@lookup-oneshot` scenarios are one-shot per database —
 a BDD re-run needs a fresh `make seed`. The lookup numbers are measured, never derived: re-measure after
@@ -95,6 +95,16 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
   create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc
   collation: run `REINDEX DATABASE entirius` once after the switch).
+- The lookup image layer MUST point at Infinity's `/embeddings_image`, never `/embeddings`
+  (`docker/settings_local.py`). Both exist and both answer 200; the text route embeds an image
+  data URL as a *string*, and since every photo shares the `data:image/jpeg;base64,` prefix they
+  all collapse onto one vector — image blocking dies silently, with nothing in the logs. Measured
+  here 2026-08-25: black vs white square came back at cosine 1.0000 through `/embeddings` and
+  0.9264 through `/embeddings_image`; fixing the route moved `recall@20` from 0.25 to 0.63.
+  It also explains a symptom that used to be blamed on HNSW being approximate: near-identical
+  vectors left the search resolving ties by traversal order, so the image leg looked random. With
+  real vectors it is deterministic — three fresh seeds returned the same number.
+  `manage.py lookup_doctor` is the handshake that catches it.
 - `make embed` GPU variant needs the GPU visible to Docker via CDI (`/etc/cdi/nvidia.yaml`,
   generated with `nvidia-ctk cdi generate`; regenerate after a driver update). Without the spec `make embed`
   falls back to CPU. First start downloads `EMBED_MODEL` (minutes) into the `hf_cache` volume — `make clean`

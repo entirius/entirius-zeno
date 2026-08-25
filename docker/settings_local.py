@@ -36,9 +36,16 @@ ATLAS_BLOCK_PRIVATE_HOSTS = False
 
 # Lookup module (django_lookup): image embeddings from the in-network `embed` container
 # (make embed). Model/dim mirror .env — the HalfVectorField dimension must match EMBED_DIM.
+#
+# `/embeddings_image`, NEVER `/embeddings`. Infinity exposes both, and the text route answers 200
+# for an image data URL by embedding the *string* — every catalog photo shares the
+# `data:image/jpeg;base64,` prefix, so they all collapse onto one vector and image blocking dies
+# without a single error in the logs. Measured on this stack 2026-08-25: through `/embeddings` a
+# black and a white square come back at cosine 1.0000 (identical), through `/embeddings_image` at
+# 0.9264. `manage.py lookup_doctor` is the handshake that catches this.
 LOOKUP_EMBEDDING = {
     "provider": "http",
-    "url": "http://embed:7997/embeddings",
+    "url": "http://embed:7997/embeddings_image",
     "model": config("EMBED_MODEL", default="google/siglip-so400m-patch14-384"),
     "dim": config("EMBED_DIM", default=1152, cast=int),
     "timeout_s": 10,
