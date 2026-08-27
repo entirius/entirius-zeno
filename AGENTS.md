@@ -123,6 +123,22 @@ budgets, watchdog. Local commits only — the operator pushes. Runbook: `scripts
 `roadmap/` (functional analyses) and `todo/` (dev-plans, punch lists) are gitignored — operator's local
 planning and execution layers, not part of the harness. Conventions live inside those folders.
 
+## Development Standards
+
+Two tiers, split by the knowledge contract — never duplicate a rule across them:
+
+| Tier | Where | Holds |
+|---|---|---|
+| Public engineering canon | `repos/docs/entirius-docs/src/content/docs/handbook/` (`make clone-docs`, served by `make docs`) | how to write code: `django-module.md` (module layout: models/schemas/services/api), `api-v2/*`, `python-toolchain.md`, `git-flow.md`, `releases.md`, `repo-naming.md`, `makefile.md`, `ci-cd.md`, `language.md`, `licensing.md`, `secret-scanning.md`, `agents-md.md` |
+| Internal additions | `~/kloczi_pc/coding/ecomhouse/standardy-rozwoju-oprogramowania/` — the canonical clone, **not** under `repos/`; every `.gitleaks.toml` symlink in this repo and in the module clones resolves into it | registries (`rejestr-*`), gitleaks blocklists + repo templates (`02-workflow/templates/`), agent working convention, migration/cutover procedures, `03-entirius-zeno/` (this harness's program folder), `04-kontrakt-wiedzy/` (the contract itself) |
+
+Product architecture decisions are ADRs in `entirius-docs/src/content/docs/architecture/` — not in either list above.
+The standards repo is Polish and private (client names); the handbook is English and public.
+
+Never clone a second copy of the standards repo — the client-name blocklist it carries is security-critical
+and a duplicate drifts silently. Procedures that reference it expect
+`ECOMHOUSE_STANDARDS=~/kloczi_pc/coding/ecomhouse/standardy-rozwoju-oprogramowania` in the environment.
+
 ## Conventions
 
 - English only: code, docs, commits, branches, PRs.
