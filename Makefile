@@ -51,12 +51,14 @@ docker image inspect $${COMPOSE_PROJECT_NAME:-entirius-zeno}-service >/dev/null 
 { echo "service image not built yet - run 'make build' first"; exit 1; }
 endef
 
-# Resolves the remote branch SHA into $$ref — passed as a build arg so the clone layer
-# cache busts exactly on HEAD change. Empty means repo or branch does not exist: fail
-# here instead of misleadingly deep inside `git clone` in the Dockerfile.
+# Resolves the remote branch or tag SHA into $$ref — passed as a build arg so the clone
+# layer cache busts exactly on HEAD change. Tags come second (a branch wins a name clash)
+# and annotated tags are peeled to the commit (`^{}`). Empty means repo or ref does not
+# exist: fail here instead of misleadingly deep inside `git clone` in the Dockerfile.
 define REF
 ref=$$(GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/entirius/$(1).git refs/heads/$(2) 2>/dev/null | cut -f1); \
-[ -n "$$ref" ] || { echo "cannot resolve entirius/$(1)@$(2) - missing repo, branch, or not public?"; exit 1; }
+[ -n "$$ref" ] || ref=$$(GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/entirius/$(1).git "refs/tags/$(2)^{}" refs/tags/$(2) 2>/dev/null | tail -1 | cut -f1); \
+[ -n "$$ref" ] || { echo "cannot resolve entirius/$(1)@$(2) - missing repo, branch/tag, or not public?"; exit 1; }
 endef
 
 build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
