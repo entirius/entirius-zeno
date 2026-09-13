@@ -186,6 +186,15 @@ scenario_scope_violation() {
   teardown
 }
 
+scenario_scope_ignored() {
+  setup
+  mkdir -p "$ZENO_ROOT/repos/pwa/cms"; git init -q -b develop "$ZENO_ROOT/repos/pwa/cms"
+  ( cd "$ZENO_ROOT/repos/pwa/cms" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  SCOPE_IGNORE="repos/pwa/cms" MOCK_CODER_STRAY=$ZENO_ROOT/repos/pwa/cms/stray.txt run_runner
+  assert_eq "scope-ignore: operator clone ignored → ready" ready "$(status_of 01-a.md)"
+  teardown
+}
+
 scenario_push_blocked() {
   setup
   git init -q --bare "$TMP/remote.git"; git -C "$ZENO_ROOT/repo" remote add origin "$TMP/remote.git"
@@ -418,5 +427,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks)
+SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks)
 main "$@"

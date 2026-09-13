@@ -313,9 +313,15 @@ remove_push_guard() { # repo-dir
   return 0
 }
 
+# SCOPE_IGNORE (runner .env, space-separated paths relative to the zeno root) drops clones the operator is
+# working in by hand from the watch list; a clone in the plan's own REPOS is always watched.
 all_repo_dirs() { # every git repo the runner watches: repos/*/* + zeno root + the plan's own REPOS
-  { local d r
-    for d in "$ZENO_ROOT"/repos/*/*/ "$ZENO_ROOT/"; do [[ -d $d/.git ]] && echo "${d%/}"; done
+  { local d r i
+    for d in "$ZENO_ROOT"/repos/*/*/ "$ZENO_ROOT/"; do
+      [[ -d $d/.git ]] || continue
+      for i in ${SCOPE_IGNORE:-}; do [[ ${d%/} == "$ZENO_ROOT/${i%/}" ]] && continue 2; done
+      echo "${d%/}"
+    done
     [[ -n ${PLAN_FILE:-} ]] && while IFS= read -r r; do d=$(repo_dir "$r"); [[ -d $d/.git ]] && echo "$d"; done < <(plan_repos "$PLAN_FILE")
   } | sort -u
 }
