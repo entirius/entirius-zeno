@@ -220,6 +220,7 @@ model_for_role() { case $1 in coder) echo "$CODER_MODEL" ;; reviewer) echo "$REV
 # Real claude -p in the role's own profile (never the operator's ~/.claude), from the zeno root, under the
 # watchdog; sentinel = <workdir>/.runner-done. Prompt via STDIN (argv limit), cap via --max-budget-usd.
 # No parsable JSON result (crash, premature sentinel, stderr noise) = failure, never a silent success.
+# Scheduling tools are denied: a pending wakeup/monitor keeps `claude -p` alive after the sentinel (watchdog kill, cap booked).
 run_role_live() { # role attempt-dir cap steer [prompt-file]  (prompt-file = pre-built prompt, e.g. CR panel)
   local role=$1 hand=$2 cap=$3 steer=$4 rc=0 model dir profile=$PROFILES_DIR/$1
   dir=$(role_workdir "$role")
@@ -232,7 +233,8 @@ run_role_live() { # role attempt-dir cap steer [prompt-file]  (prompt-file = pre
     run_with_watchdog "$ROLE_TIMEOUT" "$dir/.runner-done" "$hand/$role-out.json" \
     env -C "$ZENO_ROOT" CLAUDE_CONFIG_DIR="$profile" ${ANTHROPIC_API_KEY:+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"} \
       claude -p --output-format json --max-budget-usd "$cap" \
-      ${model:+--model "$model"} --permission-mode bypassPermissions || rc=$?
+      ${model:+--model "$model"} --permission-mode bypassPermissions \
+      --disallowedTools "ScheduleWakeup Monitor CronCreate CronDelete RemoteTrigger" || rc=$?
   rm -f "$dir/.runner-done"
   jq -e 'type == "object"' "$hand/$role-out.json" >/dev/null 2>&1 || { log "$role: no parsable result — failure"; return "${rc/#0/1}"; }
   jq -e '.is_error == true' "$hand/$role-out.json" >/dev/null 2>&1 && rc=1
