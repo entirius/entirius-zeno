@@ -89,6 +89,9 @@ EMAIL_SMTP_CONFIGURATION_CHANNELS = {
 # No COMMUNICATOR_IMAP_* settings: the communicator reads its MailboxConfig row, which the
 # communicator fixture points at greenmail:3143 (sandbox/sandbox, no SSL).
 COMMUNICATOR_LIVE_REQUIRES_PRODUCTION = True
+# Every notifications sink in zeno is a sandbox (GreenMail, blank webhook), so live sends are allowed
+# outside production here only.
+NOTIFICATIONS_ALLOW_LIVE_SENDS = True
 
 # Site audits read recorded PSI/URLScan answers from the in-network `fixtures` host
 # (siteintel maps `{base}/{domain}.{strategy}.json` — no trailing slash).
