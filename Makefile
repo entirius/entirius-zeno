@@ -258,7 +258,7 @@ e2e-funnel:  ## Run the leads funnel e2e twice: iPhone 14 emulation, then deskto
 
 e2e-accept:  ## AI-tester acceptance run of the funnel (ux-tester role, plan 13)
 	@test -f $$HOME/.claude-runner/ux-tester/settings.json || { echo "ux-tester role not registered (plan 13)"; exit 1; }
-	@scripts/dev-runner/accept.sh
+	@bash scripts/dev-runner/accept.sh
 
 # --- dev-runner (scripts/dev-runner): executes todo/<topic>/dev-plans one plan per tick ---
 PLANS ?= todo/product-lookup-dedup/dev-plans

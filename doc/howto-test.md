@@ -31,7 +31,7 @@ if it dies it names the failed step (`SEED FAILED (exit N) during: ...`).
 ## Running the BDD suite
 
 ```bash
-make bdd                      # ~645 behave scenarios over HTTP (~5 min)
+make bdd                      # ~647 behave scenarios over HTTP (~5 min; @harness needs make mail)
 make bdd TAGS=@matrix-v2      # one area only
 make bdd TAGS=@checkout       # tag list: repos/tests/*/README.md
 ```

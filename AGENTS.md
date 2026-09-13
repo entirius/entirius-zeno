@@ -50,7 +50,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed) | 645 passed / 0 failed / 15 skipped | ~5 min |
+| `make bdd` (fresh seed, `make mail`) | 647 passed / 0 failed / 15 skipped | ~2-5 min |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
 | `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-08-25 over three fresh seeds — every metric above, the image leg included, came back identical on all three) | ~1 min |
