@@ -85,6 +85,36 @@ measurement and must be labelled as one.
 `lookup_doctor` reports how many fingerprints exist, how many carry hashes and vectors, and whether any row
 was embedded with a different model than the one configured now.
 
+## Leads funnel / mail
+
+The leads platform sends and reads real mail, and asks a model for drafts. Zeno keeps both inside the
+room: mail goes to a GreenMail container, model calls go to a toolbox whose test channel only sees `fake`
+models.
+
+```bash
+make mail                     # GreenMail: SMTP :3125, IMAP :3243, REST :8380 (sandbox/sandbox)
+make toolbox-check            # toolbox reachable, AI_TOOLBOX_CHANNEL sees fake models only
+make seed                     # also purges the mailbox ("GreenMail purged." in Step 1)
+make bdd TAGS=@harness        # SMTP -> GreenMail -> REST, and an IMAP-injected reply
+```
+
+`@harness` proves the plumbing, not a module: a mail sent over SMTP is readable through the REST API, and a
+fixture reply injected with IMAP APPEND carries the `In-Reply-To` the test asked for. Module suites build on
+the same helpers (`entirius_tests.mail`, `entirius_tests.clock`). `make toolbox-check` failing on a non-fake
+model is the point — a real model visible to the zeno channel means BDD spends real money.
+
+Debugging, in this order:
+
+```bash
+docker compose --profile infra --profile service ps greenmail      # healthy?
+curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # what actually arrived
+docker compose --profile infra --profile service exec -T worker celery -A main inspect active_queues
+```
+
+A mail that never arrives is usually a queue nobody consumes (worker `-Q` differs between
+`docker-compose.yml` and `docker-compose.dev.yml`) or a channel without an entry in
+`EMAIL_SMTP_CONFIGURATION_CHANNELS` (`docker/settings_local.py`).
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

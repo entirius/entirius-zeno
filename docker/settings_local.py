@@ -69,6 +69,40 @@ ENRICHMENT_ADAPTERS: dict[str, str] = {
     "atlas": "django_atlas.services.enrichment_adapter",
 }
 
+# Leads platform — mail goes to the in-network GreenMail sandbox (make mail), never out.
+# django_email resolves SMTP per channel, so the global EMAIL_HOST is only the fallback;
+# the programme's channel idx is `default-europe` everywhere.
+EMAIL_HOST = "greenmail"
+EMAIL_PORT = 3025
+DEFAULT_FROM_EMAIL = "zeno@greenmail.test"
+EMAIL_SMTP_CONFIGURATION_CHANNELS = {
+    "default-europe": {
+        "EMAIL_HOST": "greenmail",
+        "EMAIL_PORT": 3025,
+        "EMAIL_HOST_USER": "sandbox",
+        "EMAIL_HOST_PASSWORD": "sandbox",
+        "EMAIL_USE_SSL": False,
+        "EMAIL_USE_TLS": False,
+        "DEFAULT_FROM_EMAIL": "outreach@greenmail.test",
+    }
+}
+# No COMMUNICATOR_IMAP_* settings: the communicator reads its MailboxConfig row, which the
+# communicator fixture points at greenmail:3143 (sandbox/sandbox, no SSL).
+COMMUNICATOR_LIVE_REQUIRES_PRODUCTION = True
+
+# Site audits read recorded PSI/URLScan answers from the in-network `fixtures` host
+# (siteintel maps `{base}/{domain}.{strategy}.json` — no trailing slash).
+SITEINTEL_PSI_BASE_URL = "http://fixtures:8000/fixtures/siteintel/psi"
+SITEINTEL_URLSCAN_BASE_URL = "http://fixtures:8000/fixtures/siteintel/urlscan"
+# Dev-only: same SSRF escape hatch as the lookup/atlas ones above, narrowed to `fixtures`.
+SITEINTEL_BLOCK_PRIVATE_HOSTS = False
+SITEINTEL_ALLOWED_HOSTS = ["fixtures"]
+
+# AI toolbox outside zeno (make toolbox-check); compose passes these from .env.
+AI_TOOLBOX_BASE_URL = config("AI_TOOLBOX_BASE_URL", default="http://host.docker.internal:8300")
+AI_TOOLBOX_API_KEY = config("AI_TOOLBOX_API_KEY", default="")
+AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
+
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
 QMS_TYPE = "XRAY"
@@ -100,6 +134,13 @@ LOCAL_APPS = [
     *(m for m in ("django_atlas", "django_pricefighter") if importlib.util.find_spec(m)),
     # lookup (private, plan 02): fingerprints over PIM + atlas; providers wired by plan 03.
     *(m for m in ("django_lookup",) if importlib.util.find_spec(m)),
+    # leads platform (private until their 0.1.0aN pre-releases): toolbox client, then the leaves —
+    # leads depends on siteintel + communicator, communicator on notifications.
+    *(
+        m
+        for m in ("django_utils.toolbox", "django_notifications", "django_siteintel", "django_communicator", "django_leads")
+        if importlib.util.find_spec(m)
+    ),
     "django_pim_csv",
     "django_pim_translator",
     "django_pim_export_to_magento_api",

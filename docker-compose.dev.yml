@@ -24,12 +24,12 @@ services:
   # Dev worker: same mounts + editable-install entrypoint as `service`, so celery
   # runs the local module clones (baked image lacks the private atlas/pricefighter
   # modules entirely). -Q additionally consumes the atlas_* queues the baked
-  # command ignores. Own venv volume — sharing service_venv would race two
-  # concurrent `uv sync` runs at stack start.
+  # command ignores; every other queue must match docker-compose.yml. Own venv
+  # volume — sharing service_venv would race two concurrent `uv sync` runs at stack start.
   worker:
     <<: *dns
     entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
-    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,atlas_default,atlas_images,atlas_results,lookup"]
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,atlas_default,atlas_images,atlas_results,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
     volumes:
       - ./docker/entrypoint-dev.sh:/entirius/docker/entrypoint-dev.sh:ro
       - ./docker/settings_local.py:/entirius/docker/settings_local.py:ro

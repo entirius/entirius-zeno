@@ -77,6 +77,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      # AI toolbox runs outside zeno (its own repo on the host, or the test deployment).
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Emporium test package (make clone-tests) — seed scripts and QMS csv_path expect this path
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
@@ -201,6 +207,25 @@ services:
     networks:
       - zeno
 
+  # Mail sandbox: every outgoing mail of the stack lands here (make mail). Containers use
+  # greenmail:3025 (SMTP) / 3143 (IMAP) / 8080 (REST); the host reaches the published ports.
+  greenmail:
+    image: greenmail/standalone:2.1.13
+    profiles: [service]
+    ports:
+      - "${GREENMAIL_SMTP_PORT:-3125}:3025"
+      - "${GREENMAIL_IMAP_PORT:-3243}:3143"
+      - "${GREENMAIL_API_PORT:-8380}:8080"
+    environment:
+      GREENMAIL_OPTS: -Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled -Dgreenmail.users=sandbox:sandbox@greenmail.test
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/service/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - zeno
+
   # Celery worker — required by `make seed` (QMS quantities import runs as tasks).
   # Same image as the service; in dev mode it runs the BAKED code (no hot reload).
   worker:
@@ -212,7 +237,8 @@ services:
         branch: ${SERVICE_BRANCH:-master}
         ref: ${SERVICE_REF:-unknown}
     profiles: [service]
-    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup"]
+    # Queue list is duplicated in docker-compose.dev.yml (the dev command replaces this one) — change both.
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
@@ -220,6 +246,11 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
     depends_on:

@@ -16,6 +16,9 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
 | `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
+| `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |
+| `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model |
+| `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, plan 13 — exits 1 until registered) |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -48,6 +51,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
 | `make bdd` (fresh seed) | 645 passed / 0 failed / 15 skipped | ~5 min |
+| `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
 | `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-08-25 over three fresh seeds — every metric above, the image leg included, came back identical on all three) | ~1 min |
 
@@ -92,6 +96,12 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   needs `make pwa` again.
 - First `make e2e` needs `uv run --extra e2e playwright install chromium` in the
   test-package clone (host side).
+- GreenMail is purged by seed, not by scenarios — a scenario that needs an empty mailbox purges in its own
+  `Background` (`Given the sandbox mailbox is empty`); never rely on scenario order.
+- The toolbox must be up before seed: `make toolbox-check` green first — it runs outside zeno (its own repo,
+  `runserver 0.0.0.0:8300`), containers reach it as `host.docker.internal`.
+- Worker `-Q` lives in both compose files — the dev command replaces the baked one; a queue added to one file
+  only makes its tasks queue forever in the other mode.
 - Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
   create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc
   collation: run `REINDEX DATABASE entirius` once after the switch).
