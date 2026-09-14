@@ -39,6 +39,19 @@ services:
       - ${DJANGO_PATH:-./repos/django}:/entirius/django
       - worker_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
 
+  # Dev beat: same mounts + entrypoint as the dev worker so it loads the mounted modules' schedule;
+  # own venv volume for the same reason as the worker (no concurrent `uv sync` on one venv).
+  beat:
+    <<: *dns
+    entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
+    volumes:
+      - ./docker/entrypoint-dev.sh:/entirius/docker/entrypoint-dev.sh:ro
+      - ./docker/settings_local.py:/entirius/docker/settings_local.py:ro
+      - ${SERVICES_PATH:-./repos/services}:/entirius/services
+      - ${PY_PATH:-./repos/py}:/entirius/py
+      - ${DJANGO_PATH:-./repos/django}:/entirius/django
+      - beat_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+
   # make cms-dev — the CMS container already runs `npm run serve`, so mounting the clone
   # over the image's GitHub checkout gives hot reload straight from repos/pwa/.
   cms:
@@ -79,5 +92,6 @@ services:
 volumes:
   service_venv:
   worker_venv:
+  beat_venv:
   cms_node_modules:
   hf_cache:

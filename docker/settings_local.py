@@ -9,6 +9,7 @@ and refreshed on every dev-mode start. Change .env on the host, not this file.
 import importlib.util
 
 import dj_database_url
+from celery.schedules import crontab
 from decouple import Csv, config
 
 ENVIRONMENT = "development"
@@ -104,6 +105,23 @@ SITEINTEL_ALLOWED_HOSTS = ["fixtures"]
 AI_TOOLBOX_BASE_URL = config("AI_TOOLBOX_BASE_URL", default="http://host.docker.internal:8300")
 AI_TOOLBOX_API_KEY = config("AI_TOOLBOX_API_KEY", default="")
 AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
+
+# Leads platform: rotation, retention and form consent keys the funnel relies on.
+LEADS_ROTATION_MAX = 2
+LEADS_RETENTION_DAYS = 180
+LEADS_FORM_CONSENT_KEYS = ["marketing_consent"]
+
+# Real cadence for the `beat` container (default file scheduler, no django-celery-beat).
+# BDD drives the same tasks through the modules' test endpoints instead of waiting for beat.
+CELERY_BEAT_SCHEDULE = {
+    "communicator-send-due": {"task": "django_communicator.send_due", "schedule": 300},
+    "communicator-poll-inbox": {"task": "django_communicator.poll_inbox", "schedule": 300},
+    "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
+    "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
+    "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
+    "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
+    "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
+}
 
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.

@@ -264,6 +264,36 @@ services:
     networks:
       - zeno
 
+  # Celery beat — the real cadence of CELERY_BEAT_SCHEDULE (docker/settings_local.py) for the
+  # leads platform; BDD calls the modules' test endpoints instead of waiting for it.
+  beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        service: ${SERVICE:-entirius-service-volkanos}
+        branch: ${SERVICE_BRANCH:-master}
+        ref: ${SERVICE_REF:-unknown}
+    profiles: [service]
+    command: ["celery", "-A", "main", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      ALLOWED_HOSTS: localhost,127.0.0.1,service
+      DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zeno
+
 volumes:
   postgres_data:
   redis_data:

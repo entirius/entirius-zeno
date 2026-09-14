@@ -111,6 +111,41 @@ curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # what actua
 docker compose --profile infra --profile service exec -T worker celery -A main inspect active_queues
 ```
 
+### The funnel (`@funnel`)
+
+The reference scenario of the leads platform — a CSV row to a reply in the notification bar, over the admin API
+only. Guide with all three modes: entirius-docs `guides/leads-end-to-end-testing.md` (`make docs`).
+
+```bash
+make dev                      # service, worker, beat, GreenMail
+make toolbox-check            # before seed — rules call the toolbox while the seed runs
+make migrate && make seed     # SEED OK; asserts munin lists leads, communicator, siteintel, notifications
+make bdd TAGS=@funnel         # scenarios Funnel 0 … Funnel 8, one per step
+```
+
+It proves the four modules are wired into Volkanos (apps, urls, queues, fixtures) and hand work to each other:
+import → stage rule → audit → analysis → draft → review → sandbox send → reply → stage `replied` → escalation
+mail. It is one-shot: re-run only after a fresh `make seed`. Beat runs the real cadence
+(`CELERY_BEAT_SCHEDULE` in `docker/settings_local.py`), but the scenario never waits for it — it calls the
+modules' `test/` endpoints.
+
+Debugging, in this order:
+
+```bash
+docker compose --profile infra --profile service logs worker       # rules, analysis, stage reactions
+docker compose --profile infra --profile service logs beat         # schedule loaded, tasks sent
+curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # mail that actually arrived
+curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8100/api/leads/v2/admin/default-europe/activities/?company=<id>"
+```
+
+The company timeline names the reason when a rule refuses to act (`skipped: no hooks`, `blocked: do_not_contact`).
+
+Gotchas:
+
+- GreenMail is purged by seed, not by scenarios — mailbox assertions count relative to a count saved in the
+  same scenario, never absolute.
+- The toolbox must be up before `make seed` — `make toolbox-check` green first; it runs outside zeno.
+
 A mail that never arrives is usually a queue nobody consumes (worker `-Q` differs between
 `docker-compose.yml` and `docker-compose.dev.yml`) or a channel without an entry in
 `EMAIL_SMTP_CONFIGURATION_CHANNELS` (`docker/settings_local.py`).

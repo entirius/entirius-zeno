@@ -10,7 +10,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 |---|---|
 | `make init` / `clone` | bootstrap `.env` + local clone of the service under test |
 | `make clone-repos` | clone all entirius repos into `repos/` groups, modules at uv.lock versions |
-| `make build` / `up` / `down` | build image, start/stop the stack |
+| `make build` / `up` / `down` | build image, start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container |
@@ -50,12 +50,14 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed, `make mail`) | 647 passed / 0 failed / 15 skipped | ~2-5 min |
+| `make bdd` (fresh seed, `make mail`, toolbox up) | 691 passed / 0 failed / 15 skipped | ~2-5 min |
+| `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
 | `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-08-25 over three fresh seeds — every metric above, the image leg included, came back identical on all three) | ~1 min |
 
-Suppliers-admin, atlas push, atlas merge and `@lookup-oneshot` scenarios are one-shot per database —
+Suppliers-admin, atlas push, atlas merge, `@lookup-oneshot`, `@leads-oneshot` (incl. `@funnel`) and `@communicator-oneshot`
+scenarios are one-shot per database —
 a BDD re-run needs a fresh `make seed`. The lookup numbers are measured, never derived: re-measure after
 any change to scoring, fixtures or the embedding model, and keep the order `seed` → `bdd` → `lookup-eval` —
 the `@lookup-oneshot` scenario links one fixture pair, so an eval run after BDD skips it by design.
