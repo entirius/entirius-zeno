@@ -17,7 +17,7 @@ pick plan (first in-dev = stale claim, else lowest to-dev with DEPENDS ready)
 
 | Target | Meaning |
 |---|---|
-| `make runner-init` | profiles `~/.claude-runner/{coder,reviewer,triage}` (plugins core+backend+pwa / core); idempotent |
+| `make runner-init` | profiles `~/.claude-runner/{coder,reviewer,triage,ux-tester}` (plugins core+backend+pwa / core); idempotent |
 | `make runner-test` | mock suite (zero tokens) — must be green before any live call |
 | `make runner-dry PLANS=…` | which plan would run; changes nothing |
 | `make runner-once PLANS=…` | one tick (default `PLANS=todo/product-lookup-dedup/dev-plans`) |
@@ -33,6 +33,16 @@ pick plan (first in-dev = stale claim, else lowest to-dev with DEPENDS ready)
    nothing else is shared from `~/.claude`).
 3. `make runner-test` green → live smoke `scripts/dev-runner/tests/live-smoke.sh` (~$2: caps 1/0.5/0.5) → remove `STOP`.
 4. Stack: `make dev` up, `make seed` baseline (gates run on the live stack).
+
+## Acceptance (ux-tester)
+
+`make e2e-accept` → `accept.sh`: plan-free (no pick, no scope snapshot, no commits). It puts one draft for
+`example-shop-5.test` into the review queue (communicator test endpoint), builds
+`.runner/accept/<ts>/ux-tester-prompt.md` = `roles/ux-tester.md` + `prompts/accept/leads-funnel.md` + fenced
+`make urls` + CMS login from the zeno `.env`, runs `run_role_live ux-tester` capped at `UX_CAP_USD` (model
+`UX_MODEL`) and books the cost. Exit 1 when `report.md` is missing or `## Blockers` has a list item.
+The profile gets a `playwright-firefox` MCP entry (`--headless`) in its own `.claude.json` and
+`Write(./.runner/accept/**)` from `make runner-init`. Run after `make e2e-funnel` on a fresh seed.
 
 ## Plan contract
 

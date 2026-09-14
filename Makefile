@@ -272,7 +272,7 @@ runner-dry:  ## Dry run: pick the next plan, change nothing
 runner-test:  ## Runner mock suite (zero tokens)
 	@scripts/dev-runner/tests/run-local.sh
 
-runner-init:  ## Create role profiles ~/.claude-runner/{coder,reviewer,triage} (idempotent)
+runner-init:  ## Create role profiles ~/.claude-runner/{coder,reviewer,triage,ux-tester} (idempotent)
 	@scripts/dev-runner/init.sh
 
 runner-loop:  ## Tick every 5 min until scripts/dev-runner/STOP exists (sleep inhibited)

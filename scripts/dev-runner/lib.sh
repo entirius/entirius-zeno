@@ -14,10 +14,10 @@ load_env() {
   : "${WORK_DIR:=$STATE_DIR/work}" "${LOCK_FILE:=$STATE_DIR/lock}" "${SPEND_DIR:=$STATE_DIR}"
   : "${STOP_FILE:=$RUNNER_DIR/STOP}" "${GATES_DIR:=$RUNNER_DIR/gates}"
   : "${BASE_BRANCH:=develop}" "${MAX_ATTEMPTS:=3}" "${MAX_REVIEW_ROUNDS:=1}"
-  : "${CODER_CAP_USD:=15}" "${REVIEWER_CAP_USD:=3}" "${TRIAGE_CAP_USD:=1}" "${DAILY_CAP_USD:=60}"
+  : "${CODER_CAP_USD:=15}" "${REVIEWER_CAP_USD:=3}" "${TRIAGE_CAP_USD:=1}" "${UX_CAP_USD:=8}" "${DAILY_CAP_USD:=60}"
   : "${ROLE_TIMEOUT:=3600}" "${SENTINEL_GRACE:=90}" "${POLL_STEP:=2}"
   : "${MOCK_ROLES:=0}" "${DRY:=0}" "${PROFILES_DIR:=$HOME/.claude-runner}"
-  : "${CODER_MODEL:=claude-opus-5}" "${REVIEWER_MODEL:=claude-fable-5}" "${TRIAGE_MODEL:=claude-fable-5}"
+  : "${CODER_MODEL:=claude-opus-5}" "${REVIEWER_MODEL:=claude-fable-5}" "${TRIAGE_MODEL:=claude-fable-5}" "${UX_MODEL:=claude-opus-5}"
   : "${GITLEAKS_CONFIG:=$ZENO_ROOT/.gitleaks.toml}"
   [[ -n ${PLANS_DIR:-} ]] || die "PLANS_DIR required (--plans <dir>)"
   [[ -d $PLANS_DIR ]] || die "plans dir not found: $PLANS_DIR"
@@ -215,7 +215,7 @@ run_role() { # role attempt-dir cap steer?
   return "$rc"
 }
 
-model_for_role() { case $1 in coder) echo "$CODER_MODEL" ;; reviewer) echo "$REVIEWER_MODEL" ;; triage) echo "$TRIAGE_MODEL" ;; esac; }
+model_for_role() { case $1 in coder) echo "$CODER_MODEL" ;; reviewer) echo "$REVIEWER_MODEL" ;; triage) echo "$TRIAGE_MODEL" ;; ux-tester) echo "$UX_MODEL" ;; esac; }
 
 # Real claude -p in the role's own profile (never the operator's ~/.claude), from the zeno root, under the
 # watchdog; sentinel = <workdir>/.runner-done. Prompt via STDIN (argv limit), cap via --max-budget-usd.

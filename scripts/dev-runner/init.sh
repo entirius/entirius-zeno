@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# make runner-init — role profiles in ~/.claude-runner/<role> (coder, reviewer, triage). Idempotent.
+# make runner-init — role profiles in ~/.claude-runner/<role> (coder, reviewer, triage, ux-tester). Idempotent.
 # Copies nothing from ~/.claude; on RUNNER_SHARE_LOGIN=1 the OAuth credentials file is SYMLINKED into each
 # profile (roles need auth; alternative: ANTHROPIC_API_KEY in scripts/dev-runner/.env).
 set -euo pipefail
@@ -38,7 +38,19 @@ write_profile() { # role — merges over an existing settings.json (operator add
   echo "profile $1: $dir"
 }
 
-for role in coder reviewer triage; do write_profile "$role"; done
+# ux-tester drives a browser: profiles carry no MCP servers and deny ~/.claude/**, so the entry lives in the
+# profile itself; --headless because the runner has no display. Its only write target is .runner/accept/.
+ux_tester_extras() {
+  local dir=$PROFILES_DIR/ux-tester mcp
+  mcp='{"mcpServers": {"playwright-firefox": {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--browser", "firefox", "--headless"]}}}'
+  if [[ -f $dir/.claude.json ]]; then jq -s '.[0] * .[1]' "$dir/.claude.json" <(echo "$mcp") > "$dir/.claude.json.tmp" && mv "$dir/.claude.json.tmp" "$dir/.claude.json"
+  else echo "$mcp" > "$dir/.claude.json"; fi
+  jq '.permissions.allow = ((.permissions.allow // []) + ["Write(./.runner/accept/**)"] | unique)' "$dir/settings.json" > "$dir/settings.json.tmp" \
+    && mv "$dir/settings.json.tmp" "$dir/settings.json"
+}
+
+for role in coder reviewer triage ux-tester; do write_profile "$role"; done
+ux_tester_extras
 [[ ${1:-} == --logout ]] && { rm -f "$PROFILES_DIR"/*/.credentials.json; echo "role credentials removed"; exit 0; }
 if [[ -z ${ANTHROPIC_API_KEY:-} && ! -f $PROFILES_DIR/coder/.credentials.json ]]; then
   echo "NOTE: no auth for roles — set ANTHROPIC_API_KEY in scripts/dev-runner/.env or run with RUNNER_SHARE_LOGIN=1"
