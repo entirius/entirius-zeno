@@ -18,7 +18,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
 | `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |
 | `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model |
-| `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, plan 13 — exits 1 until registered) |
+| `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`) |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -54,6 +54,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 4 passed | ~10 s |
+| `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | 4 passed twice (iPhone 14, desktop) | ~20 s |
+| `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
 | `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-08-25 over three fresh seeds — every metric above, the image leg included, came back identical on all three) | ~1 min |
 
 Suppliers-admin, atlas push, atlas merge, `@lookup-oneshot`, `@leads-oneshot` (incl. `@funnel`) and `@communicator-oneshot`
