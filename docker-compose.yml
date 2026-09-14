@@ -281,9 +281,13 @@ services:
       DEBUG: "true"
       ALLOWED_HOSTS: localhost,127.0.0.1,service
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
+      EMBED_DIM: ${EMBED_DIM:-1152}
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
