@@ -38,11 +38,12 @@ write_profile() { # role — merges over an existing settings.json (operator add
   echo "profile $1: $dir"
 }
 
-# ux-tester drives a browser: profiles carry no MCP servers and deny ~/.claude/**, so the entry lives in the
+# ux-tester drives a browser (MCP pinned at 0.0.81: `@latest` drifts to a Firefox build the host cache lacks;
+# after a bump run `npx -y @playwright/mcp@<v> install-browser firefox`): profiles carry no MCP servers and deny ~/.claude/**, so the entry lives in the
 # profile itself; --headless because the runner has no display. Its only write target is .runner/accept/.
 ux_tester_extras() {
   local dir=$PROFILES_DIR/ux-tester mcp
-  mcp='{"mcpServers": {"playwright-firefox": {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--browser", "firefox", "--headless"]}}}'
+  mcp='{"mcpServers": {"playwright-firefox": {"command": "npx", "args": ["-y", "@playwright/mcp@0.0.81", "--browser", "firefox", "--headless"]}}}'
   if [[ -f $dir/.claude.json ]]; then jq -s '.[0] * .[1]' "$dir/.claude.json" <(echo "$mcp") > "$dir/.claude.json.tmp" && mv "$dir/.claude.json.tmp" "$dir/.claude.json"
   else echo "$mcp" > "$dir/.claude.json"; fi
   jq '.permissions.allow = ((.permissions.allow // []) + ["Write(./.runner/accept/**)"] | unique)' "$dir/settings.json" > "$dir/settings.json.tmp" \
