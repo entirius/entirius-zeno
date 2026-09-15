@@ -14,7 +14,7 @@ review queue; that company already has a replied thread from `make e2e-funnel` (
 
 | 1-2 | At 1280x800 open Leads -> Import, upload nothing, read the screen; then Board and Stages | Import explains what a CSV needs and what happens next; Board shows the stages with companies; Stages lists the configured stages |
 | L-15 | At 1280x800 open a company card of a company that is also a shop customer | The card says the company is a known customer and links to it |
-| Send now | At 1280x800 open a draft in Review and use Send now | The mail goes out at once; the timeline shows it without the scheduled badge |
+| Send now (C-31) | At 1280x800 open Communicator -> Settings; in the scheduled mails table use Send now on a waiting mail (Review has no Send now: Send there schedules by the send policy) | The row shows "next beat" instead of its slot; send policy caps and mode still apply |
 
 Also judge: the empty Inbox, the back buttons on Review and Thread, and the same flow at 1280x800 where the
 Inbox is the left column and Review/Thread the right one.
