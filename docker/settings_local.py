@@ -9,6 +9,7 @@ and refreshed on every dev-mode start. Change .env on the host, not this file.
 import importlib.util
 
 import dj_database_url
+from celery.schedules import crontab
 from decouple import Csv, config
 
 ENVIRONMENT = "development"
@@ -69,6 +70,64 @@ ENRICHMENT_ADAPTERS: dict[str, str] = {
     "atlas": "django_atlas.services.enrichment_adapter",
 }
 
+# Leads platform — mail goes to the in-network GreenMail sandbox (make mail), never out.
+# django_email resolves SMTP per channel, so the global EMAIL_HOST is only the fallback;
+# the programme's channel idx is `default-europe` everywhere.
+EMAIL_HOST = "greenmail"
+EMAIL_PORT = 3025
+DEFAULT_FROM_EMAIL = "zeno@greenmail.test"
+EMAIL_SMTP_CONFIGURATION_CHANNELS = {
+    "default-europe": {
+        "EMAIL_HOST": "greenmail",
+        "EMAIL_PORT": 3025,
+        "EMAIL_HOST_USER": "sandbox",
+        "EMAIL_HOST_PASSWORD": "sandbox",
+        "EMAIL_USE_SSL": False,
+        "EMAIL_USE_TLS": False,
+        "DEFAULT_FROM_EMAIL": "outreach@greenmail.test",
+    }
+}
+# No COMMUNICATOR_IMAP_* settings: the communicator reads its MailboxConfig row, which the
+# communicator fixture points at greenmail:3143 (sandbox/sandbox, no SSL).
+# Every notifications sink in zeno is a sandbox (GreenMail, blank webhook), so live sends are allowed
+# outside production here only.
+NOTIFICATIONS_ALLOW_LIVE_SENDS = True
+
+# Site audits read recorded PSI/URLScan answers from the in-network `fixtures` host
+# (siteintel maps `{base}/{domain}.{strategy}.json` — no trailing slash).
+SITEINTEL_PSI_BASE_URL = "http://fixtures:8000/fixtures/siteintel/psi"
+SITEINTEL_URLSCAN_BASE_URL = "http://fixtures:8000/fixtures/siteintel/urlscan"
+# Dev-only: same SSRF escape hatch as the lookup/atlas ones above, narrowed to `fixtures`.
+SITEINTEL_BLOCK_PRIVATE_HOSTS = False
+SITEINTEL_ALLOWED_HOSTS = ["fixtures"]
+
+# AI toolbox outside zeno (make toolbox-check); compose passes these from .env.
+AI_TOOLBOX_BASE_URL = config("AI_TOOLBOX_BASE_URL", default="http://host.docker.internal:8300")
+AI_TOOLBOX_API_KEY = config("AI_TOOLBOX_API_KEY", default="")
+AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
+
+# Leads platform: rotation, retention and form consent keys the funnel relies on.
+LEADS_ROTATION_MAX = 2
+LEADS_RETENTION_DAYS = 180
+LEADS_FORM_CONSENT_KEYS = ["marketing_consent"]
+# A queued CSV import is written by `service` and read by `worker`: the path is the `leads_import_tmp`
+# volume mounted into both (docker-compose.yml and docker-compose.dev.yml).
+LEADS_IMPORT_TMP_DIR = "/tmp/django_leads"
+
+# Real cadence for the `beat` container (default file scheduler, no django-celery-beat).
+# BDD drives the same tasks through the modules' test endpoints instead of waiting for beat.
+CELERY_BEAT_SCHEDULE = {
+    "communicator-send-due": {"task": "django_communicator.send_due", "schedule": 300},
+    "communicator-poll-inbox": {"task": "django_communicator.poll_inbox", "schedule": 300},
+    "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
+    "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
+    "siteintel-sweep-stuck": {"task": "django_siteintel.sweep_stuck_audits", "schedule": crontab(minute="*/10")},
+    "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
+    "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
+    "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
+    "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
+}
+
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
 QMS_TYPE = "XRAY"
@@ -100,6 +159,13 @@ LOCAL_APPS = [
     *(m for m in ("django_atlas", "django_pricefighter") if importlib.util.find_spec(m)),
     # lookup (private, plan 02): fingerprints over PIM + atlas; providers wired by plan 03.
     *(m for m in ("django_lookup",) if importlib.util.find_spec(m)),
+    # leads platform (on PyPI since 2026-09-15): toolbox client, then the leaves —
+    # leads depends on siteintel + communicator, communicator on notifications.
+    "django_utils.toolbox",
+    "django_notifications",
+    "django_siteintel",
+    "django_communicator",
+    "django_leads",
     "django_pim_csv",
     "django_pim_translator",
     "django_pim_export_to_magento_api",

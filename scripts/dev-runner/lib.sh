@@ -14,10 +14,10 @@ load_env() {
   : "${WORK_DIR:=$STATE_DIR/work}" "${LOCK_FILE:=$STATE_DIR/lock}" "${SPEND_DIR:=$STATE_DIR}"
   : "${STOP_FILE:=$RUNNER_DIR/STOP}" "${GATES_DIR:=$RUNNER_DIR/gates}"
   : "${BASE_BRANCH:=develop}" "${MAX_ATTEMPTS:=3}" "${MAX_REVIEW_ROUNDS:=1}"
-  : "${CODER_CAP_USD:=15}" "${REVIEWER_CAP_USD:=3}" "${TRIAGE_CAP_USD:=1}" "${DAILY_CAP_USD:=60}"
+  : "${CODER_CAP_USD:=15}" "${REVIEWER_CAP_USD:=3}" "${TRIAGE_CAP_USD:=1}" "${UX_CAP_USD:=8}" "${DAILY_CAP_USD:=60}"
   : "${ROLE_TIMEOUT:=3600}" "${SENTINEL_GRACE:=90}" "${POLL_STEP:=2}"
   : "${MOCK_ROLES:=0}" "${DRY:=0}" "${PROFILES_DIR:=$HOME/.claude-runner}"
-  : "${CODER_MODEL:=claude-opus-5}" "${REVIEWER_MODEL:=claude-fable-5}" "${TRIAGE_MODEL:=claude-fable-5}"
+  : "${CODER_MODEL:=claude-opus-5}" "${REVIEWER_MODEL:=claude-fable-5}" "${TRIAGE_MODEL:=claude-fable-5}" "${UX_MODEL:=claude-opus-5}"
   : "${GITLEAKS_CONFIG:=$ZENO_ROOT/.gitleaks.toml}"
   [[ -n ${PLANS_DIR:-} ]] || die "PLANS_DIR required (--plans <dir>)"
   [[ -d $PLANS_DIR ]] || die "plans dir not found: $PLANS_DIR"
@@ -215,11 +215,12 @@ run_role() { # role attempt-dir cap steer?
   return "$rc"
 }
 
-model_for_role() { case $1 in coder) echo "$CODER_MODEL" ;; reviewer) echo "$REVIEWER_MODEL" ;; triage) echo "$TRIAGE_MODEL" ;; esac; }
+model_for_role() { case $1 in coder) echo "$CODER_MODEL" ;; reviewer) echo "$REVIEWER_MODEL" ;; triage) echo "$TRIAGE_MODEL" ;; ux-tester) echo "$UX_MODEL" ;; esac; }
 
 # Real claude -p in the role's own profile (never the operator's ~/.claude), from the zeno root, under the
 # watchdog; sentinel = <workdir>/.runner-done. Prompt via STDIN (argv limit), cap via --max-budget-usd.
 # No parsable JSON result (crash, premature sentinel, stderr noise) = failure, never a silent success.
+# Scheduling tools are denied: a pending wakeup/monitor keeps `claude -p` alive after the sentinel (watchdog kill, cap booked).
 run_role_live() { # role attempt-dir cap steer [prompt-file]  (prompt-file = pre-built prompt, e.g. CR panel)
   local role=$1 hand=$2 cap=$3 steer=$4 rc=0 model dir profile=$PROFILES_DIR/$1
   dir=$(role_workdir "$role")
@@ -232,7 +233,8 @@ run_role_live() { # role attempt-dir cap steer [prompt-file]  (prompt-file = pre
     run_with_watchdog "$ROLE_TIMEOUT" "$dir/.runner-done" "$hand/$role-out.json" \
     env -C "$ZENO_ROOT" CLAUDE_CONFIG_DIR="$profile" ${ANTHROPIC_API_KEY:+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"} \
       claude -p --output-format json --max-budget-usd "$cap" \
-      ${model:+--model "$model"} --permission-mode bypassPermissions || rc=$?
+      ${model:+--model "$model"} --permission-mode bypassPermissions \
+      --disallowedTools "ScheduleWakeup Monitor CronCreate CronDelete RemoteTrigger" || rc=$?
   rm -f "$dir/.runner-done"
   jq -e 'type == "object"' "$hand/$role-out.json" >/dev/null 2>&1 || { log "$role: no parsable result — failure"; return "${rc/#0/1}"; }
   jq -e '.is_error == true' "$hand/$role-out.json" >/dev/null 2>&1 && rc=1
@@ -311,9 +313,15 @@ remove_push_guard() { # repo-dir
   return 0
 }
 
+# SCOPE_IGNORE (runner .env, space-separated paths relative to the zeno root) drops clones the operator is
+# working in by hand from the watch list; a clone in the plan's own REPOS is always watched.
 all_repo_dirs() { # every git repo the runner watches: repos/*/* + zeno root + the plan's own REPOS
-  { local d r
-    for d in "$ZENO_ROOT"/repos/*/*/ "$ZENO_ROOT/"; do [[ -d $d/.git ]] && echo "${d%/}"; done
+  { local d r i
+    for d in "$ZENO_ROOT"/repos/*/*/ "$ZENO_ROOT/"; do
+      [[ -d $d/.git ]] || continue
+      for i in ${SCOPE_IGNORE:-}; do [[ ${d%/} == "$ZENO_ROOT/${i%/}" ]] && continue 2; done
+      echo "${d%/}"
+    done
     [[ -n ${PLAN_FILE:-} ]] && while IFS= read -r r; do d=$(repo_dir "$r"); [[ -d $d/.git ]] && echo "$d"; done < <(plan_repos "$PLAN_FILE")
   } | sort -u
 }

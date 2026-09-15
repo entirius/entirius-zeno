@@ -77,9 +77,17 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      # AI toolbox runs outside zeno (its own repo on the host, or the test deployment).
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Emporium test package (make clone-tests) — seed scripts and QMS csv_path expect this path
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      # LEADS_IMPORT_TMP_DIR: the queued CSV import written here is read by the worker
+      - leads_import_tmp:/tmp/django_leads
     depends_on:
       db:
         condition: service_healthy
@@ -201,6 +209,26 @@ services:
     networks:
       - zeno
 
+  # Mail sandbox: every outgoing mail of the stack lands here (make mail). Containers use
+  # greenmail:3025 (SMTP) / 3143 (IMAP) / 8080 (REST); the host reaches the published ports.
+  greenmail:
+    image: greenmail/standalone:2.1.13
+    profiles: [service]
+    ports:
+      - "${GREENMAIL_SMTP_PORT:-3125}:3025"
+      - "${GREENMAIL_IMAP_PORT:-3243}:3143"
+      - "${GREENMAIL_API_PORT:-8380}:8080"
+    environment:
+      GREENMAIL_OPTS: -Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled -Dgreenmail.users=sandbox:sandbox@greenmail.test
+    healthcheck:
+      # The image ships bash + java only (no wget/curl/nc) — probe readiness over /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /api/service/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - zeno
+
   # Celery worker — required by `make seed` (QMS quantities import runs as tasks).
   # Same image as the service; in dev mode it runs the BAKED code (no hot reload).
   worker:
@@ -212,7 +240,8 @@ services:
         branch: ${SERVICE_BRANCH:-master}
         ref: ${SERVICE_REF:-unknown}
     profiles: [service]
-    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup"]
+    # Queue list is duplicated in docker-compose.dev.yml (the dev command replaces this one) — change both.
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
@@ -220,8 +249,48 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      - leads_import_tmp:/tmp/django_leads
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zeno
+
+  # Celery beat — the real cadence of CELERY_BEAT_SCHEDULE (docker/settings_local.py) for the
+  # leads platform; BDD calls the modules' test endpoints instead of waiting for it.
+  beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        service: ${SERVICE:-entirius-service-volkanos}
+        branch: ${SERVICE_BRANCH:-master}
+        ref: ${SERVICE_REF:-unknown}
+    profiles: [service]
+    command: ["celery", "-A", "main", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      ALLOWED_HOSTS: localhost,127.0.0.1,service
+      DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
+      EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -240,6 +309,7 @@ volumes:
   docs_alt_node_modules:
   www_node_modules:
   www_next:
+  leads_import_tmp:
 
 networks:
   zeno:

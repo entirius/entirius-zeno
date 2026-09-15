@@ -31,7 +31,7 @@ if it dies it names the failed step (`SEED FAILED (exit N) during: ...`).
 ## Running the BDD suite
 
 ```bash
-make bdd                      # ~645 behave scenarios over HTTP (~5 min)
+make bdd                      # ~647 behave scenarios over HTTP (~5 min; @harness needs make mail)
 make bdd TAGS=@matrix-v2      # one area only
 make bdd TAGS=@checkout       # tag list: repos/tests/*/README.md
 ```
@@ -84,6 +84,71 @@ measurement and must be labelled as one.
 
 `lookup_doctor` reports how many fingerprints exist, how many carry hashes and vectors, and whether any row
 was embedded with a different model than the one configured now.
+
+## Leads funnel / mail
+
+The leads platform sends and reads real mail, and asks a model for drafts. Zeno keeps both inside the
+room: mail goes to a GreenMail container, model calls go to a toolbox whose test channel only sees `fake`
+models.
+
+```bash
+make mail                     # GreenMail: SMTP :3125, IMAP :3243, REST :8380 (sandbox/sandbox)
+make toolbox-check            # toolbox reachable, AI_TOOLBOX_CHANNEL sees fake models only
+make seed                     # also purges the mailbox ("GreenMail purged." in Step 1)
+make bdd TAGS=@harness        # SMTP -> GreenMail -> REST, and an IMAP-injected reply
+```
+
+`@harness` proves the plumbing, not a module: a mail sent over SMTP is readable through the REST API, and a
+fixture reply injected with IMAP APPEND carries the `In-Reply-To` the test asked for. Module suites build on
+the same helpers (`entirius_tests.mail`, `entirius_tests.clock`). `make toolbox-check` failing on a non-fake
+model is the point — a real model visible to the zeno channel means BDD spends real money.
+
+Debugging, in this order:
+
+```bash
+docker compose --profile infra --profile service ps greenmail      # healthy?
+curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # what actually arrived
+docker compose --profile infra --profile service exec -T worker celery -A main inspect active_queues
+```
+
+### The funnel (`@funnel`)
+
+The reference scenario of the leads platform — a CSV row to a reply in the notification bar, over the admin API
+only. Guide with all three modes: entirius-docs `guides/leads-end-to-end-testing.md` (`make docs`).
+
+```bash
+make dev                      # service, worker, beat, GreenMail
+make toolbox-check            # before seed — rules call the toolbox while the seed runs
+make migrate && make seed     # SEED OK; asserts munin lists leads, communicator, siteintel, notifications
+make bdd TAGS=@funnel         # scenarios Funnel 0 … Funnel 8, one per step
+```
+
+It proves the four modules are wired into Volkanos (apps, urls, queues, fixtures) and hand work to each other:
+import → stage rule → audit → analysis → draft → review → sandbox send → reply → stage `replied` → escalation
+mail. It is one-shot: re-run only after a fresh `make seed`. Beat runs the real cadence
+(`CELERY_BEAT_SCHEDULE` in `docker/settings_local.py`), but the scenario never waits for it — it calls the
+modules' `test/` endpoints.
+
+Debugging, in this order:
+
+```bash
+docker compose --profile infra --profile service logs worker       # rules, analysis, stage reactions
+docker compose --profile infra --profile service logs beat         # schedule loaded, tasks sent
+curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # mail that actually arrived
+curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8100/api/leads/v2/admin/default-europe/activities/?company=<id>"
+```
+
+The company timeline names the reason when a rule refuses to act (`skipped: no hooks`, `blocked: do_not_contact`).
+
+Gotchas:
+
+- GreenMail is purged by seed, not by scenarios — mailbox assertions count relative to a count saved in the
+  same scenario, never absolute.
+- The toolbox must be up before `make seed` — `make toolbox-check` green first; it runs outside zeno.
+
+A mail that never arrives is usually a queue nobody consumes (worker `-Q` differs between
+`docker-compose.yml` and `docker-compose.dev.yml`) or a channel without an entry in
+`EMAIL_SMTP_CONFIGURATION_CHANNELS` (`docker/settings_local.py`).
 
 ## Troubleshooting
 
