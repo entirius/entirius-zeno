@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Full runner mechanics on mocks — local, zero LLM. Each path ×2:
 # green · red→triage→retry→escalate · steer-ok · triage-escalate · review-critical · crash-resume ·
-# flock · budget · timeout · dry · headerless→wip · e2e-accept guards.
+# flock · budget · timeout · dry · headerless→wip · e2e-accept guards · ux-tester profile.
 # Scenarios run with `set +e`: an assertion failure is counted, never aborts the suite.
 set -uo pipefail
 TESTS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -462,6 +462,34 @@ scenario_accept_guards() {
   teardown
 }
 
+# A Write/Edit deny rule covers a path when it matches the path or one of its parent directories (gitignore
+# semantics). Bash `*` also crosses `/`, so the check errs towards "covered".
+deny_covers() { # settings.json path → 0 when a deny rule covers the path
+  local rule glob part prefix
+  while IFS= read -r rule; do
+    glob=${rule#*(}; glob=${glob%)}; glob=${glob#./}; glob=${glob//\*\*/*}
+    prefix=""
+    for part in ${2//\// }; do
+      prefix=${prefix:+$prefix/}$part
+      # shellcheck disable=SC2053
+      [[ $prefix == $glob ]] && return 0
+    done
+  done < <(jq -r '.permissions.deny[] | select(startswith("Write(") or startswith("Edit("))' "$1")
+  return 1
+}
+
+scenario_ux_profile() { # make runner-init output: the ux-tester can write its report
+  setup
+  mkdir -p "$TMP/runner" "$TMP/profiles/ux-tester"; cp "$RUNNER_DIR/init.sh" "$TMP/runner/"   # no .env next to the copy
+  echo '{"permissions": {"deny": ["Write(./*)"]}}' > "$TMP/profiles/ux-tester/settings.json"   # an old profile
+  env -u RUNNER_SHARE_LOGIN PROFILES_DIR="$TMP/profiles" MARKETPLACE_PATH="$TMP" bash "$TMP/runner/init.sh" >>"$TMP/init.log" 2>&1
+  local settings=$TMP/profiles/ux-tester/settings.json
+  deny_covers "$settings" .runner/accept/x/report.md; assert_eq "ux-profile: no deny rule covers the report" 1 "$?"
+  deny_covers "$settings" repos/django/x/a.py; assert_eq "ux-profile: repos stay denied" 0 "$?"
+  assert_eq "ux-profile: report dir allowed" 1 "$(jq '[.permissions.allow[] | select(. == "Write(./.runner/accept/**)")] | length' "$settings")"
+  teardown
+}
+
 main() {
   command -v jq >/dev/null || { echo "jq missing"; exit 1; }
   command -v flock >/dev/null || { echo "flock missing"; exit 1; }
@@ -476,5 +504,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks accept_guards)
+SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks accept_guards ux_profile)
 main "$@"

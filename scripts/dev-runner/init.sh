@@ -43,8 +43,9 @@ write_profile() { # role — merges over an existing settings.json (operator add
 # profile itself; --headless because the runner has no display. Its only write target is .runner/accept/.
 # Deny rules are best-effort (a pattern cannot say "outside .runner/accept/", a shell finds other ways to write);
 # the guarantee is accept.sh's scope check, which fails the run on any repo change. Playwright MCP tools and
-# read-only Bash stay allowed.
-UX_DENY='["Write(./*)", "Edit(./*)", "Write(./repos/**)", "Edit(./repos/**)", "Write(./scripts/**)", "Edit(./scripts/**)",
+# read-only Bash stay allowed. Never deny `./*`: rules match with gitignore semantics, so it covers `.runner/` and
+# with it the report (deny beats allow).
+UX_DENY='["Write(./repos/**)", "Edit(./repos/**)", "Write(./scripts/**)", "Edit(./scripts/**)",
   "Write(./docker/**)", "Edit(./docker/**)", "Write(./todo/**)", "Edit(./todo/**)", "Write(./roadmap/**)", "Edit(./roadmap/**)",
   "Write(./.runner/handoff/**)", "Edit(./.runner/handoff/**)", "NotebookEdit",
   "Bash(git commit:*)", "Bash(git add:*)", "Bash(git reset:*)", "Bash(git checkout:*)", "Bash(git restore:*)",
@@ -57,7 +58,7 @@ ux_tester_extras() {
   if [[ -f $dir/.claude.json ]]; then jq -s '.[0] * .[1]' "$dir/.claude.json" <(echo "$mcp") > "$dir/.claude.json.tmp" && mv "$dir/.claude.json.tmp" "$dir/.claude.json"
   else echo "$mcp" > "$dir/.claude.json"; fi
   jq --argjson deny "$UX_DENY" '.permissions.deny = ((.permissions.deny // []) + $deny | unique)
-    | .permissions.allow = ((.permissions.allow // []) - ["Write(./.runner/accept/**)"])' "$dir/settings.json" > "$dir/settings.json.tmp" \
+    | .permissions.allow = ((.permissions.allow // []) + ["Write(./.runner/accept/**)"] | unique)' "$dir/settings.json" > "$dir/settings.json.tmp" \
     && mv "$dir/settings.json.tmp" "$dir/settings.json"
 }
 
