@@ -159,13 +159,13 @@ LOCAL_APPS = [
     *(m for m in ("django_atlas", "django_pricefighter") if importlib.util.find_spec(m)),
     # lookup (private, plan 02): fingerprints over PIM + atlas; providers wired by plan 03.
     *(m for m in ("django_lookup",) if importlib.util.find_spec(m)),
-    # leads platform (private until their 0.1.0aN pre-releases): toolbox client, then the leaves —
+    # leads platform (on PyPI since 2026-09-15): toolbox client, then the leaves —
     # leads depends on siteintel + communicator, communicator on notifications.
-    *(
-        m
-        for m in ("django_utils.toolbox", "django_notifications", "django_siteintel", "django_communicator", "django_leads")
-        if importlib.util.find_spec(m)
-    ),
+    "django_utils.toolbox",
+    "django_notifications",
+    "django_siteintel",
+    "django_communicator",
+    "django_leads",
     "django_pim_csv",
     "django_pim_translator",
     "django_pim_export_to_magento_api",
