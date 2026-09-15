@@ -105,6 +105,9 @@ SITEINTEL_ALLOWED_HOSTS = ["fixtures"]
 AI_TOOLBOX_BASE_URL = config("AI_TOOLBOX_BASE_URL", default="http://host.docker.internal:8300")
 AI_TOOLBOX_API_KEY = config("AI_TOOLBOX_API_KEY", default="")
 AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
+# Dev-only outage switch (django_utils.toolbox.outage): communicator `test/toolbox-outage/` fails every toolbox
+# call as a refused connection — `@toolbox-down` BDD simulates an outage without stopping the toolbox.
+AI_TOOLBOX_TEST_SWITCH = True
 
 # Leads platform: rotation, retention and form consent keys the funnel relies on.
 LEADS_ROTATION_MAX = 2
@@ -120,9 +123,12 @@ CELERY_BEAT_SCHEDULE = {
     "communicator-send-due": {"task": "django_communicator.send_due", "schedule": 300},
     "communicator-poll-inbox": {"task": "django_communicator.poll_inbox", "schedule": 300},
     "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
+    # After a toolbox outage: transiently failed drafts / intel analyses retried once the toolbox answers.
+    "communicator-retry-drafts": {"task": "django_communicator.retry_failed_drafts", "schedule": 600},
     "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
     "siteintel-sweep-stuck": {"task": "django_siteintel.sweep_stuck_audits", "schedule": crontab(minute="*/10")},
     "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
+    "leads-retry-analyses": {"task": "django_leads.retry_failed_analyses", "schedule": 600},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},

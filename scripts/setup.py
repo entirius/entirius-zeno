@@ -11,7 +11,8 @@
     SERVICE_BRANCH=<branch> python3 scripts/setup.py   # service branch other than .env for one run
 
 Order matters: clones before the stack (bind mounts), mail + CMS before seed, toolbox checked before seed.
-A missing toolbox is not fatal: the stack runs in degraded mode (AI drafts and intel fail visibly).
+A missing toolbox is not fatal: the stack runs in degraded mode (AI drafts and intel fail visibly) and
+recovers on its own once the toolbox is back (beat retries transient failures).
 """
 
 import os
@@ -143,6 +144,10 @@ def toolbox():
     print(
         "  Expect the AI scenarios (communicator drafts, @funnel) to fail in `make bdd`."
     )
+    print(
+        "  Recovery is automatic: once the toolbox answers, beat retries transiently failed drafts and intel"
+    )
+    print("  analyses every 10 min (at most 3 times each) — new drafts still wait for review.")
     return "degraded"
 
 
