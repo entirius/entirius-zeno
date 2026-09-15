@@ -20,6 +20,8 @@ services:
       - ${DJANGO_PATH:-./repos/django}:/entirius/django
       # shadows the host clone's .venv — the container keeps its own env in the project dir
       - service_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+      # LEADS_IMPORT_TMP_DIR shared with the worker (also in docker-compose.yml)
+      - leads_import_tmp:/tmp/django_leads
 
   # Dev worker: same mounts + editable-install entrypoint as `service`, so celery
   # runs the local module clones (baked image lacks the private atlas/pricefighter
@@ -38,6 +40,7 @@ services:
       - ${PY_PATH:-./repos/py}:/entirius/py
       - ${DJANGO_PATH:-./repos/django}:/entirius/django
       - worker_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+      - leads_import_tmp:/tmp/django_leads
 
   # Dev beat: same mounts + entrypoint as the dev worker so it loads the mounted modules' schedule;
   # own venv volume for the same reason as the worker (no concurrent `uv sync` on one venv).
@@ -93,5 +96,6 @@ volumes:
   service_venv:
   worker_venv:
   beat_venv:
+  leads_import_tmp:
   cms_node_modules:
   hf_cache:

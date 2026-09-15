@@ -110,6 +110,9 @@ AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
 LEADS_ROTATION_MAX = 2
 LEADS_RETENTION_DAYS = 180
 LEADS_FORM_CONSENT_KEYS = ["marketing_consent"]
+# A queued CSV import is written by `service` and read by `worker`: the path is the `leads_import_tmp`
+# volume mounted into both (docker-compose.yml and docker-compose.dev.yml).
+LEADS_IMPORT_TMP_DIR = "/tmp/django_leads"
 
 # Real cadence for the `beat` container (default file scheduler, no django-celery-beat).
 # BDD drives the same tasks through the modules' test endpoints instead of waiting for beat.
@@ -118,6 +121,8 @@ CELERY_BEAT_SCHEDULE = {
     "communicator-poll-inbox": {"task": "django_communicator.poll_inbox", "schedule": 300},
     "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
     "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
+    "siteintel-sweep-stuck": {"task": "django_siteintel.sweep_stuck_audits", "schedule": crontab(minute="*/10")},
+    "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},

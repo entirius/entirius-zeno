@@ -86,6 +86,8 @@ services:
     volumes:
       # Emporium test package (make clone-tests) — seed scripts and QMS csv_path expect this path
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      # LEADS_IMPORT_TMP_DIR: the queued CSV import written here is read by the worker
+      - leads_import_tmp:/tmp/django_leads
     depends_on:
       db:
         condition: service_healthy
@@ -254,6 +256,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      - leads_import_tmp:/tmp/django_leads
     depends_on:
       db:
         condition: service_healthy
@@ -306,6 +309,7 @@ volumes:
   docs_alt_node_modules:
   www_node_modules:
   www_next:
+  leads_import_tmp:
 
 networks:
   zeno:
