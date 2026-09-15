@@ -41,12 +41,23 @@ write_profile() { # role — merges over an existing settings.json (operator add
 # ux-tester drives a browser (MCP pinned at 0.0.81: `@latest` drifts to a Firefox build the host cache lacks;
 # after a bump run `npx -y @playwright/mcp@<v> install-browser firefox`): profiles carry no MCP servers and deny ~/.claude/**, so the entry lives in the
 # profile itself; --headless because the runner has no display. Its only write target is .runner/accept/.
+# Deny rules are best-effort (a pattern cannot say "outside .runner/accept/", a shell finds other ways to write);
+# the guarantee is accept.sh's scope check, which fails the run on any repo change. Playwright MCP tools and
+# read-only Bash stay allowed.
+UX_DENY='["Write(./*)", "Edit(./*)", "Write(./repos/**)", "Edit(./repos/**)", "Write(./scripts/**)", "Edit(./scripts/**)",
+  "Write(./docker/**)", "Edit(./docker/**)", "Write(./todo/**)", "Edit(./todo/**)", "Write(./roadmap/**)", "Edit(./roadmap/**)",
+  "Write(./.runner/handoff/**)", "Edit(./.runner/handoff/**)", "NotebookEdit",
+  "Bash(git commit:*)", "Bash(git add:*)", "Bash(git reset:*)", "Bash(git checkout:*)", "Bash(git restore:*)",
+  "Bash(git stash:*)", "Bash(git rm:*)", "Bash(git mv:*)", "Bash(git apply:*)", "Bash(git merge:*)", "Bash(git rebase:*)",
+  "Bash(rm:*)", "Bash(sed -i:*)", "Bash(tee:*)", "Bash(npm:*)", "Bash(uv:*)", "Bash(make:*)",
+  "Bash(*> repos/*)", "Bash(*>repos/*)", "Bash(*>> repos/*)", "Bash(*> ./repos/*)", "Bash(*>./repos/*)"]'
 ux_tester_extras() {
   local dir=$PROFILES_DIR/ux-tester mcp
   mcp='{"mcpServers": {"playwright-firefox": {"command": "npx", "args": ["-y", "@playwright/mcp@0.0.81", "--browser", "firefox", "--headless"]}}}'
   if [[ -f $dir/.claude.json ]]; then jq -s '.[0] * .[1]' "$dir/.claude.json" <(echo "$mcp") > "$dir/.claude.json.tmp" && mv "$dir/.claude.json.tmp" "$dir/.claude.json"
   else echo "$mcp" > "$dir/.claude.json"; fi
-  jq '.permissions.allow = ((.permissions.allow // []) + ["Write(./.runner/accept/**)"] | unique)' "$dir/settings.json" > "$dir/settings.json.tmp" \
+  jq --argjson deny "$UX_DENY" '.permissions.deny = ((.permissions.deny // []) + $deny | unique)
+    | .permissions.allow = ((.permissions.allow // []) - ["Write(./.runner/accept/**)"])' "$dir/settings.json" > "$dir/settings.json.tmp" \
     && mv "$dir/settings.json.tmp" "$dir/settings.json"
 }
 

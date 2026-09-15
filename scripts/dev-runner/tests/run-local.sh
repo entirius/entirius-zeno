@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Full runner mechanics on mocks — local, zero LLM. Each path ×2:
 # green · red→triage→retry→escalate · steer-ok · triage-escalate · review-critical · crash-resume ·
-# flock · budget · timeout · dry · headerless→wip.
+# flock · budget · timeout · dry · headerless→wip · e2e-accept guards.
 # Scenarios run with `set +e`: an assertion failure is counted, never aborts the suite.
 set -uo pipefail
 TESTS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -413,6 +413,55 @@ scenario_operator_between_ticks() { # operator edits an unrelated repo between t
   teardown
 }
 
+# make e2e-accept on stubs (claude, curl, make): guards before any session, minimal role env, scope check after it.
+accept_stubs() { # bin-dir — the claude stub writes the report and touches the sentinel named in its prompt
+  mkdir -p "$1" "$TMP/profiles/ux-tester"; echo '{}' > "$TMP/profiles/ux-tester/settings.json"
+  cat > "$1/claude" <<STUB
+#!/usr/bin/env bash
+prompt=\$(cat); env > "$TMP/role.env"
+run=\$(sed -n 's/^- Run directory (report + screenshots): //p' <<<"\$prompt")
+printf '# report\n## Blockers\nNone.\n' > "\$run/report.md"
+[[ -f $TMP/stray-on ]] && echo stray > "$ZENO_ROOT/repos/django/other/stray.txt"
+touch "\$(grep -o 'touch [^\`]*' <<<"\$prompt" | tail -1 | cut -d' ' -f2)"
+echo '{"total_cost_usd": 0.01, "is_error": false}'
+STUB
+  cat > "$1/curl" <<STUB
+#!/usr/bin/env bash
+case "\$*" in
+  *token*) echo '{"access": "t"}' ;;
+  *companies*) if [[ -f $TMP/no-company ]]; then echo '{"results": []}'; else echo '{"results": [{"id": 1, "name": "Example Shop 5"}]}'; fi ;;
+esac
+STUB
+  printf '#!/usr/bin/env bash\necho "  cms http://localhost:8180"\n' > "$1/make"
+  chmod +x "$1"/*
+}
+
+run_accept() { # → exit code of accept.sh
+  env PATH="$TMP/bin:$PATH" PROFILES_DIR="$TMP/profiles" AI_TOOLBOX_API_KEY=toolbox-value \
+    bash "$RUNNER_DIR/accept.sh" >>"$TMP/accept.log" 2>&1
+}
+
+scenario_accept_guards() {
+  setup
+  git init -q -b feature/mock "$ZENO_ROOT"; ( cd "$ZENO_ROOT" && printf 'repo/\n.runner/\ntodo/\n' > .gitignore && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  mkdir -p "$ZENO_ROOT/repos/django/other"; git init -q -b develop "$ZENO_ROOT/repos/django/other"
+  ( cd "$ZENO_ROOT/repos/django/other" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  accept_stubs "$TMP/bin"
+  run_accept; assert_eq "accept: clean session accepted" 0 "$?"
+  assert_eq "accept: role env has no toolbox key" 0 "$(grep -c '^AI_TOOLBOX' "$TMP/role.env")"
+  assert_eq "accept: role env keeps HOME" 1 "$(grep -c '^HOME=' "$TMP/role.env")"
+  touch "$TMP/stray-on"; run_accept; assert_eq "accept: a repo change during the session fails" 1 "$?"
+  assert_true "accept: offending path reported" grep -q 'repos/django/other.*stray.txt' "$TMP/accept.log"
+  rm -f "$TMP/stray-on" "$ZENO_ROOT/repos/django/other/stray.txt" "$TMP/role.env"
+  touch "$TMP/no-company"; run_accept; assert_eq "accept: no company exits 1" 1 "$?"
+  assert_true "accept: no company starts no session" test ! -f "$TMP/role.env"
+  rm -f "$TMP/no-company"; touch "$STOP_FILE"; run_accept; assert_eq "accept: STOP file exits 1" 1 "$?"
+  assert_true "accept: STOP starts no session" test ! -f "$TMP/role.env"
+  rm -f "$STOP_FILE"; echo 999 > "$STATE_DIR/spend-$(date +%F).log"; run_accept; assert_eq "accept: daily cap exits 1" 1 "$?"
+  assert_true "accept: over the cap starts no session" test ! -f "$TMP/role.env"
+  teardown
+}
+
 main() {
   command -v jq >/dev/null || { echo "jq missing"; exit 1; }
   command -v flock >/dev/null || { echo "flock missing"; exit 1; }
@@ -427,5 +476,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks)
+SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks accept_guards)
 main "$@"
