@@ -18,7 +18,8 @@ plugins_for() { # role → JSON object of enabledPlugins
 }
 
 # Deny rules still apply under bypassPermissions — second layer behind the runner's post-hoc guards.
-DENY='["Bash(git push:*)", "Bash(git remote:*)", "Bash(git config:*)", "Bash(git tag:*)", "Read(//home/**/.ssh/**)", "Read(//home/**/.claude/**)", "Read(//home/**/.claude-runner/**)", "Read(./.env)", "Write(./.env)", "Read(./scripts/dev-runner/.env)", "Write(./scripts/dev-runner/**)"]'
+# File protection needs Edit(path): the CLI ignores Write(path) in file permission checks (it warns on start).
+DENY='["Bash(git push:*)", "Bash(git remote:*)", "Bash(git config:*)", "Bash(git tag:*)", "Read(//home/**/.ssh/**)", "Read(//home/**/.claude/**)", "Read(//home/**/.claude-runner/**)", "Read(./.env)", "Edit(./.env)", "Read(./scripts/dev-runner/.env)", "Edit(./scripts/dev-runner/**)"]'
 
 write_profile() { # role — merges over an existing settings.json (operator additions survive)
   local dir=$PROFILES_DIR/$1 gen
@@ -62,8 +63,49 @@ ux_tester_extras() {
     && mv "$dir/settings.json.tmp" "$dir/settings.json"
 }
 
+# Plugins and rules follow the marketplace source. The entirius-core SessionStart hook syncs rules into
+# $HOME/.claude only, which role profiles (CLAUDE_CONFIG_DIR) never see, and profiles never update their
+# plugins on their own (coder sat on 3.0.0 entries with no files behind them). Skipped when the marketplace
+# has no plugins/ dir (mock test copy).
+plugin_names() { plugins_for "$1" | jq -r 'keys[] | sub("@entirius-code$"; "")'; }
+
+update_plugins() { # role — install or update the role's plugins to the marketplace's current version
+  local dir=$PROFILES_DIR/$1 p verb
+  CLAUDE_CONFIG_DIR=$dir claude plugin marketplace update entirius-code >/dev/null
+  for p in $(plugin_names "$1"); do
+    verb=install
+    jq -e --arg k "$p@entirius-code" '.plugins[$k]' "$dir/plugins/installed_plugins.json" >/dev/null 2>&1 && verb=update
+    CLAUDE_CONFIG_DIR=$dir claude plugin "$verb" "$p@entirius-code" >/dev/null
+  done
+}
+
+sync_rules() { # role — rules/global of the role's plugins → <profile>/rules/<plugin>/ (auto-loaded, Read deny does not apply)
+  local dir=$PROFILES_DIR/$1 p
+  for p in $(plugin_names "$1"); do
+    rm -rf "$dir/rules/$p"
+    [[ -d $MARKETPLACE_PATH/plugins/$p/rules/global ]] || continue
+    mkdir -p "$dir/rules" && cp -r "$MARKETPLACE_PATH/plugins/$p/rules/global" "$dir/rules/$p"
+  done
+}
+
+# rules/specific (on-demand) → .runner/rules-on-demand/<plugin>/: roles cannot Read ~/.claude/** or
+# ~/.claude-runner/**, so skills' `~/.claude/rules-on-demand/…` references resolve here (roles/standards.md).
+sync_rules_on_demand() {
+  local target p
+  target=$(cd "$RUNNER_DIR/../.." && pwd)/.runner/rules-on-demand
+  rm -rf "$target" && mkdir -p "$target"
+  for p in $(plugin_names coder); do
+    [[ -d $MARKETPLACE_PATH/plugins/$p/rules/specific ]] && cp -r "$MARKETPLACE_PATH/plugins/$p/rules/specific" "$target/$p"
+  done
+  echo "on-demand rules: $target"
+}
+
 for role in coder reviewer triage ux-tester; do write_profile "$role"; done
 ux_tester_extras
+if [[ -d $MARKETPLACE_PATH/plugins ]]; then
+  for role in coder reviewer triage ux-tester; do update_plugins "$role"; sync_rules "$role"; done
+  sync_rules_on_demand
+fi
 [[ ${1:-} == --logout ]] && { rm -f "$PROFILES_DIR"/*/.credentials.json; echo "role credentials removed"; exit 0; }
 if [[ -z ${ANTHROPIC_API_KEY:-} && ! -f $PROFILES_DIR/coder/.credentials.json ]]; then
   echo "NOTE: no auth for roles — set ANTHROPIC_API_KEY in scripts/dev-runner/.env or run with RUNNER_SHARE_LOGIN=1"

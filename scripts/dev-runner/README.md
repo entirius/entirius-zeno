@@ -17,7 +17,7 @@ pick plan (first in-dev = stale claim, else lowest to-dev with DEPENDS ready)
 
 | Target | Meaning |
 |---|---|
-| `make runner-init` | profiles `~/.claude-runner/{coder,reviewer,triage,ux-tester}` (plugins core+backend+pwa / core); idempotent |
+| `make runner-init` | profiles `~/.claude-runner/{coder,reviewer,triage,ux-tester}` (plugins core+backend+pwa / core, updated to the marketplace version); global rules copied into each profile, on-demand rules into `.runner/rules-on-demand/`; idempotent — rerun after every entirius-code release |
 | `make runner-test` | mock suite (zero tokens) — must be green before any live call |
 | `make runner-dry PLANS=…` | which plan would run; changes nothing |
 | `make runner-once PLANS=…` | one tick (default `PLANS=todo/product-lookup-dedup/dev-plans`) |
