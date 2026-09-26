@@ -81,6 +81,16 @@ services:
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
+      OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
+      OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
+      OUTREACH_SMTP_USER: ${OUTREACH_SMTP_USER:-sandbox}
+      OUTREACH_SMTP_PASSWORD: ${OUTREACH_SMTP_PASSWORD:-sandbox}
+      OUTREACH_SMTP_USE_SSL: ${OUTREACH_SMTP_USE_SSL:-false}
+      OUTREACH_SMTP_USE_TLS: ${OUTREACH_SMTP_USE_TLS:-false}
+      OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
+      # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
+      ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -252,6 +262,16 @@ services:
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
+      OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
+      OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
+      OUTREACH_SMTP_USER: ${OUTREACH_SMTP_USER:-sandbox}
+      OUTREACH_SMTP_PASSWORD: ${OUTREACH_SMTP_PASSWORD:-sandbox}
+      OUTREACH_SMTP_USE_SSL: ${OUTREACH_SMTP_USE_SSL:-false}
+      OUTREACH_SMTP_USE_TLS: ${OUTREACH_SMTP_USE_TLS:-false}
+      OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
+      # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
+      ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -289,6 +309,16 @@ services:
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
+      OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
+      OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
+      OUTREACH_SMTP_USER: ${OUTREACH_SMTP_USER:-sandbox}
+      OUTREACH_SMTP_PASSWORD: ${OUTREACH_SMTP_PASSWORD:-sandbox}
+      OUTREACH_SMTP_USE_SSL: ${OUTREACH_SMTP_USE_SSL:-false}
+      OUTREACH_SMTP_USE_TLS: ${OUTREACH_SMTP_USE_TLS:-false}
+      OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
+      # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
+      ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

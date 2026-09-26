@@ -126,7 +126,7 @@ lookup-eval:  ## Measure lookup precision/recall on the labelled pairs of the te
 
 module-test:  ## Run a mounted module's tests in the service container: make module-test MODULE=entirius-django-x
 	@echo "$(MODULE)" | grep -Eq '^[A-Za-z0-9._-]+$$' || { echo "ERROR: MODULE is required (e.g. make module-test MODULE=entirius-django-lookup)"; exit 1; }
-	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
+	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && { ! grep -q "^test *=" pyproject.toml || uv pip install -q --python "$$(command -v python)" -e ".[test]"; } && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
 
 down:  ## Stop everything
 	$(COMPOSE_DEV) $(ALL_PROFILES) down

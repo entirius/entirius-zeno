@@ -14,7 +14,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make build` / `up` / `down` | build image, start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
-| `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container |
+| `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
 | `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
 | `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |

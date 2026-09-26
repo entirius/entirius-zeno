@@ -71,22 +71,46 @@ ENRICHMENT_ADAPTERS: dict[str, str] = {
 }
 
 # Leads platform — mail goes to the in-network GreenMail sandbox (make mail), never out.
-# django_email resolves SMTP per channel, so the global EMAIL_HOST is only the fallback;
-# the programme's channel idx is `default-europe` everywhere.
+# django_email resolves SMTP per channel; the global EMAIL_HOST is the fallback for every sender except
+# django_communicator, which sends nothing without the channel's entry (`communicator.smtp` check).
+# The programme's channel idx is `default-europe` everywhere.
 EMAIL_HOST = "greenmail"
 EMAIL_PORT = 3025
 DEFAULT_FROM_EMAIL = "zeno@greenmail.test"
+# OUTREACH_SMTP_* in .env point the channel at a real server (a "sandbox canary": the channel stays in sandbox
+# mode, so every mail still goes to its sandbox mailbox). Unset = GreenMail, the BDD baseline.
 EMAIL_SMTP_CONFIGURATION_CHANNELS = {
     "default-europe": {
-        "EMAIL_HOST": "greenmail",
-        "EMAIL_PORT": 3025,
-        "EMAIL_HOST_USER": "sandbox",
-        "EMAIL_HOST_PASSWORD": "sandbox",
-        "EMAIL_USE_SSL": False,
-        "EMAIL_USE_TLS": False,
-        "DEFAULT_FROM_EMAIL": "outreach@greenmail.test",
+        "EMAIL_HOST": config("OUTREACH_SMTP_HOST", default="greenmail"),
+        "EMAIL_PORT": config("OUTREACH_SMTP_PORT", default=3025, cast=int),
+        "EMAIL_HOST_USER": config("OUTREACH_SMTP_USER", default="sandbox"),
+        "EMAIL_HOST_PASSWORD": config("OUTREACH_SMTP_PASSWORD", default="sandbox"),
+        "EMAIL_USE_SSL": config("OUTREACH_SMTP_USE_SSL", default=False, cast=bool),
+        "EMAIL_USE_TLS": config("OUTREACH_SMTP_USE_TLS", default=False, cast=bool),
+        "DEFAULT_FROM_EMAIL": config("OUTREACH_SMTP_FROM", default="outreach@greenmail.test"),
     }
 }
+# A real server shares that entry with EVERY module on the channel (notifications, contact forms, accounts,
+# checkout …) — the communicator's sandbox mode alone would not stop them. So with a real host, every recipient of
+# every mail is rewritten to ZENO_MAIL_REDIRECT_TO at the transport; without it the service refuses to boot.
+if EMAIL_SMTP_CONFIGURATION_CHANNELS["default-europe"]["EMAIL_HOST"] != "greenmail":
+    from django.core.exceptions import ImproperlyConfigured
+    from django.core.mail.backends.smtp import EmailBackend as _SmtpBackend
+
+    ZENO_MAIL_REDIRECT_TO = config("ZENO_MAIL_REDIRECT_TO", default="")
+    if not ZENO_MAIL_REDIRECT_TO:
+        raise ImproperlyConfigured("OUTREACH_SMTP_HOST is a real server: set ZENO_MAIL_REDIRECT_TO in .env")
+
+    class RedirectAllBackend(_SmtpBackend):
+        """Every recipient becomes ZENO_MAIL_REDIRECT_TO; the original ones travel in X-Zeno-Original-To."""
+
+        def send_messages(self, email_messages):
+            for message in email_messages:
+                message.extra_headers["X-Zeno-Original-To"] = ", ".join(message.recipients())
+                message.to, message.cc, message.bcc = [ZENO_MAIL_REDIRECT_TO], [], []
+            return super().send_messages(email_messages)
+
+    EMAIL_BACKEND = "main.settings_local.RedirectAllBackend"
 # No COMMUNICATOR_IMAP_* settings: the communicator reads its MailboxConfig row, which the
 # communicator fixture points at greenmail:3143 (sandbox/sandbox, no SSL).
 # Every notifications sink in zeno is a sandbox (GreenMail, blank webhook), so live sends are allowed
