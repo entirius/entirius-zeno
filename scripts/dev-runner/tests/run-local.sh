@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Full runner mechanics on mocks — local, zero LLM. Each path ×2:
 # green · red→triage→retry→escalate · steer-ok · triage-escalate · review-critical · crash-resume ·
-# flock · budget · timeout · dry · headerless→wip.
+# flock · budget · timeout · dry · headerless→wip · streams · e2e-accept guards · ux-tester profile.
 # Scenarios run with `set +e`: an assertion failure is counted, never aborts the suite.
 set -uo pipefail
 TESTS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -17,7 +17,7 @@ setup() {
   export MOCK_ROLES=1 MAX_ATTEMPTS=2 MAX_REVIEW_ROUNDS=1 SENTINEL_GRACE=1 POLL_STEP=1 ROLE_TIMEOUT=60
   export MOCK_CODER_MODE=good MOCK_REVIEWER_MODE=ok MOCK_TRIAGE_MODE=retry
   export MOCK_CODER_COST=0.01 MOCK_CODER_SLEEP=0 MOCK_STEER_FIXES=0
-  unset MOCK_CODER_STRAY MOCK_CODER_LEAK MOCK_CODER_TAMPER MOCK_CR_JSON MOCK_CR_FAIL MOCK_CR_PROSE
+  unset MOCK_CODER_NOCOMMIT MOCK_CODER_STRAY MOCK_CODER_LEAK MOCK_CODER_TAMPER MOCK_CR_JSON MOCK_CR_FAIL MOCK_CR_PROSE
   mkdir -p "$PLANS_DIR" "$ZENO_ROOT/repo"
   cp "$RUNNER_DIR"/mocks/plans/*.md "$PLANS_DIR/"
   git init -q -b develop "$ZENO_ROOT/repo"
@@ -52,6 +52,19 @@ scenario_green() {
   assert_eq "green: 02 still to-dev before 2nd tick" to-dev "$(status_of 02-b.md)"
   run_runner
   assert_eq "green: 02 → ready after 01 ready" ready "$(status_of 02-b.md)"
+  teardown
+}
+
+scenario_no_commit_ok() { # planning plans (NO_COMMIT_OK) end ready without commits; without the flag they park
+  setup
+  sed -i 's/^TIMEOUT_S: 60$/&\nNO_COMMIT_OK: true/; s#^test -f repo/IMPL_OK$#true#' "$PLANS_DIR/01-a.md"
+  MOCK_CODER_NOCOMMIT=1 run_runner
+  assert_eq "no-commit-ok: 01 → ready without commits" ready "$(status_of 01-a.md)"
+  teardown
+  setup
+  sed -i 's#^test -f repo/IMPL_OK$#true#' "$PLANS_DIR/01-a.md"
+  MOCK_CODER_NOCOMMIT=1 run_runner
+  assert_eq "no-commit-ok: without the flag a commit-less plan parks" parked "$(status_of 01-a.md)"
   teardown
 }
 
@@ -183,6 +196,15 @@ scenario_scope_violation() {
   assert_eq "scope: parked" parked "$(status_of 01-a.md)"
   assert_true "scope: offending path journaled" grep -q 'out-of-scope write: .*repos/django/other.*stray.txt' "$PLANS_DIR/JOURNAL.md"
   assert_true "scope: push guard removed after park" test ! -f "$ZENO_ROOT/repo/.git/hooks/pre-push"
+  teardown
+}
+
+scenario_scope_ignored() {
+  setup
+  mkdir -p "$ZENO_ROOT/repos/pwa/cms"; git init -q -b develop "$ZENO_ROOT/repos/pwa/cms"
+  ( cd "$ZENO_ROOT/repos/pwa/cms" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  SCOPE_IGNORE="repos/pwa/cms" MOCK_CODER_STRAY=$ZENO_ROOT/repos/pwa/cms/stray.txt run_runner
+  assert_eq "scope-ignore: operator clone ignored → ready" ready "$(status_of 01-a.md)"
   teardown
 }
 
@@ -404,6 +426,176 @@ scenario_operator_between_ticks() { # operator edits an unrelated repo between t
   teardown
 }
 
+scenario_gate_negation() { # a gate line `! cmd` fails the gate when cmd succeeds (set -e alone ignores `!`)
+  setup
+  local p=$TMP/neg.md
+  printf 'STATUS: to-dev\n\n```gate\n! grep -q base repo/README.md\ntrue\n```\n' > "$p"
+  assert_true "gate-negation: a matching '! grep' fails the gate" bash -c "! '$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\n! grep -q absent repo/README.md\ntrue\n```\n' > "$p"
+  assert_true "gate-negation: a non-matching '! grep' passes" bash -c "'$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\n! grep -q absent repo/missing-file\ntrue\n```\n' > "$p"
+  assert_true "gate-negation: '! grep' on a missing path fails closed" bash -c "! '$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  teardown
+}
+
+# Streams: plan 01 in stream 1 on the clone repos/pwa/cms, plan 02 in stream 2 on its worktree repos/pwa/cms-s2.
+streams_layout() {
+  mkdir -p "$ZENO_ROOT/repos/pwa"; mv "$ZENO_ROOT/repo" "$ZENO_ROOT/repos/pwa/cms"
+  git -C "$ZENO_ROOT/repos/pwa/cms" worktree add -q -b feature/mock-s2 "$ZENO_ROOT/repos/pwa/cms-s2" develop
+  sed -i 's|^REPOS:.*|REPOS: pwa/cms|; s|^test -f repo/IMPL_OK|test -f repos/pwa/cms/IMPL_OK|' "$PLANS_DIR/01-a.md"
+  sed -i 's|^STATUS: to-dev|&\nSTREAM: 2|; s|^REPOS:.*|REPOS: pwa/cms-s2|; s|^BRANCH:.*|BRANCH: feature/mock-s2|
+    s|^test -f repo/IMPL_OK|test -f repos/pwa/cms-s2/IMPL_OK|' "$PLANS_DIR/02-b.md"
+}
+hooks() { echo "$ZENO_ROOT/repos/pwa/cms/.git/hooks"; }
+
+scenario_streams_pick() { # a loop takes only its own stream's plans — to-dev and stale in-dev alike
+  setup
+  sed -i 's|^STATUS: to-dev|&\nSTREAM: 2|' "$PLANS_DIR/02-b.md"
+  STREAM=2 run_runner
+  assert_eq "streams-pick: stream 2 leaves stream-1 plan 01" to-dev "$(status_of 01-a.md)"
+  sed -i 's/^STATUS: to-dev/STATUS: in-dev/' "$PLANS_DIR/01-a.md"
+  STREAM=2 run_runner
+  assert_true "streams-pick: stream 2 never resumes a stream-1 claim" test ! -d "$STATE_DIR/handoff/mock-01"
+  sed -i 's/^STATUS: in-dev/STATUS: to-dev/' "$PLANS_DIR/01-a.md"
+  run_runner; run_runner
+  assert_eq "streams-pick: stream 1 → 01 ready" ready "$(status_of 01-a.md)"
+  assert_eq "streams-pick: stream 1 skips stream-2 plan 02" to-dev "$(status_of 02-b.md)"
+  STREAM=2 run_runner
+  assert_eq "streams-pick: stream 2 → 02 ready" ready "$(status_of 02-b.md)"
+  teardown
+}
+
+scenario_streams_parallel() { # two loops at once: own locks, no scope clash, push guard held until the last one out
+  setup; streams_layout
+  sed -i 's/^DEPENDS:.*/DEPENDS:/' "$PLANS_DIR/02-b.md"
+  MOCK_CODER_SLEEP=1 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local p1=$!
+  MOCK_CODER_SLEEP=6 STREAM=2 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local p2=$!
+  wait "$p1" 2>/dev/null
+  assert_eq "streams-parallel: 01 ready" ready "$(status_of 01-a.md)"
+  assert_true "streams-parallel: guard kept while stream 2 holds the repo" grep -q 'dev-runner' "$(hooks)/pre-push"
+  wait "$p2" 2>/dev/null
+  assert_eq "streams-parallel: 02 ready" ready "$(status_of 02-b.md)"
+  assert_true "streams-parallel: no lock bounce" bash -c "! grep -q 'another run holds the lock' '$TMP/runner.log'"
+  assert_true "streams-parallel: no scope violation" bash -c "! grep -q 'out-of-scope' '$PLANS_DIR/JOURNAL.md'"
+  assert_true "streams-parallel: guard removed by the last stream" test ! -f "$(hooks)/pre-push"
+  assert_true "streams-parallel: no stream markers left" bash -c "! ls '$(hooks)'/pre-push.runner-s* 2>/dev/null"
+  teardown
+}
+
+scenario_streams_mid_claim_plan() { # a stream-2 plan with a watched repo, added while stream 1 codes: no false scope hit
+  setup
+  mkdir -p "$ZENO_ROOT/repos/docs"; git init -q -b develop "$ZENO_ROOT/repos/docs/site"
+  ( cd "$ZENO_ROOT/repos/docs/site" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  MOCK_CODER_SLEEP=3 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local pid=$!
+  sleep 1
+  printf 'STATUS: to-dev\nSTREAM: 2\nDEPENDS:\nREPOS: docs/site\nBRANCH: feature/site\n\n```gate\ntrue\n```\n' > "$PLANS_DIR/03-c.md"
+  wait "$pid" 2>/dev/null
+  assert_eq "mid-claim plan: 01 ready" ready "$(status_of 01-a.md)"
+  assert_true "mid-claim plan: no scope violation" bash -c "! grep -q 'out-of-scope' '$PLANS_DIR/JOURNAL.md' 2>/dev/null"
+  teardown
+}
+
+scenario_streams_sync() { # stream-2 plan depending on a stream-1 plan merges its done commit before coding
+  setup; streams_layout
+  run_runner
+  STREAM=2 run_runner
+  assert_eq "streams-sync: 02 ready" ready "$(status_of 02-b.md)"
+  local d01 b02; d01=$(cat "$STATE_DIR/bases/done-mock-01-cms.sha"); b02=$(cat "$STATE_DIR/bases/mock-02-cms-s2.sha")
+  assert_true "streams-sync: 01 merged into feature/mock-s2" git -C "$ZENO_ROOT/repos/pwa/cms-s2" merge-base --is-ancestor "$d01" feature/mock-s2
+  assert_true "streams-sync: review window starts after the merge" git -C "$ZENO_ROOT/repos/pwa/cms-s2" merge-base --is-ancestor "$d01" "$b02"
+  assert_true "streams-sync: merge logged" grep -q 'stream sync: merged plan 01' "$TMP/runner.log"
+  teardown
+}
+
+scenario_streams_sync_conflict() { # a conflicting dependency merge parks the plan with a clean tree
+  setup; streams_layout
+  run_runner
+  ( cd "$ZENO_ROOT/repos/pwa/cms-s2" && echo other > IMPL_OK && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: other" )
+  STREAM=2 run_runner
+  assert_eq "streams-conflict: 02 parked" parked "$(status_of 02-b.md)"
+  assert_true "streams-conflict: reason journaled" grep -q 'stream sync: merging plan 01 conflicts' "$PLANS_DIR/JOURNAL.md"
+  assert_eq "streams-conflict: tree clean" "" "$(git -C "$ZENO_ROOT/repos/pwa/cms-s2" status --porcelain)"
+  assert_true "streams-conflict: guard removed" test ! -f "$(hooks)/pre-push"
+  teardown
+}
+
+# make e2e-accept on stubs (claude, curl, make): guards before any session, minimal role env, scope check after it.
+accept_stubs() { # bin-dir — the claude stub writes the report and touches the sentinel named in its prompt
+  mkdir -p "$1" "$TMP/profiles/ux-tester"; echo '{}' > "$TMP/profiles/ux-tester/settings.json"
+  cat > "$1/claude" <<STUB
+#!/usr/bin/env bash
+prompt=\$(cat); env > "$TMP/role.env"
+run=\$(sed -n 's/^- Run directory (report + screenshots): //p' <<<"\$prompt")
+printf '# report\n## Blockers\nNone.\n' > "\$run/report.md"
+[[ -f $TMP/stray-on ]] && echo stray > "$ZENO_ROOT/repos/django/other/stray.txt"
+touch "\$(grep -o 'touch [^\`]*' <<<"\$prompt" | tail -1 | cut -d' ' -f2)"
+echo '{"total_cost_usd": 0.01, "is_error": false}'
+STUB
+  cat > "$1/curl" <<STUB
+#!/usr/bin/env bash
+case "\$*" in
+  *token*) echo '{"access": "t"}' ;;
+  *companies*) if [[ -f $TMP/no-company ]]; then echo '{"results": []}'; else echo '{"results": [{"id": 1, "name": "Example Shop 5"}]}'; fi ;;
+esac
+STUB
+  printf '#!/usr/bin/env bash\necho "  cms http://localhost:8180"\n' > "$1/make"
+  chmod +x "$1"/*
+}
+
+run_accept() { # → exit code of accept.sh
+  env PATH="$TMP/bin:$PATH" PROFILES_DIR="$TMP/profiles" AI_TOOLBOX_API_KEY=toolbox-value \
+    bash "$RUNNER_DIR/accept.sh" >>"$TMP/accept.log" 2>&1
+}
+
+scenario_accept_guards() {
+  setup
+  git init -q -b feature/mock "$ZENO_ROOT"; ( cd "$ZENO_ROOT" && printf 'repo/\n.runner/\ntodo/\n' > .gitignore && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  mkdir -p "$ZENO_ROOT/repos/django/other"; git init -q -b develop "$ZENO_ROOT/repos/django/other"
+  ( cd "$ZENO_ROOT/repos/django/other" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  accept_stubs "$TMP/bin"
+  run_accept; assert_eq "accept: clean session accepted" 0 "$?"
+  assert_eq "accept: role env has no toolbox key" 0 "$(grep -c '^AI_TOOLBOX' "$TMP/role.env")"
+  assert_eq "accept: role env keeps HOME" 1 "$(grep -c '^HOME=' "$TMP/role.env")"
+  touch "$TMP/stray-on"; run_accept; assert_eq "accept: a repo change during the session fails" 1 "$?"
+  assert_true "accept: offending path reported" grep -q 'repos/django/other.*stray.txt' "$TMP/accept.log"
+  rm -f "$TMP/stray-on" "$ZENO_ROOT/repos/django/other/stray.txt" "$TMP/role.env"
+  touch "$TMP/no-company"; run_accept; assert_eq "accept: no company exits 1" 1 "$?"
+  assert_true "accept: no company starts no session" test ! -f "$TMP/role.env"
+  rm -f "$TMP/no-company"; touch "$STOP_FILE"; run_accept; assert_eq "accept: STOP file exits 1" 1 "$?"
+  assert_true "accept: STOP starts no session" test ! -f "$TMP/role.env"
+  rm -f "$STOP_FILE"; echo 999 > "$STATE_DIR/spend-$(date +%F).log"; run_accept; assert_eq "accept: daily cap exits 1" 1 "$?"
+  assert_true "accept: over the cap starts no session" test ! -f "$TMP/role.env"
+  teardown
+}
+
+# A Write/Edit deny rule covers a path when it matches the path or one of its parent directories (gitignore
+# semantics). Bash `*` also crosses `/`, so the check errs towards "covered".
+deny_covers() { # settings.json path → 0 when a deny rule covers the path
+  local rule glob part prefix
+  while IFS= read -r rule; do
+    glob=${rule#*(}; glob=${glob%)}; glob=${glob#./}; glob=${glob//\*\*/*}
+    prefix=""
+    for part in ${2//\// }; do
+      prefix=${prefix:+$prefix/}$part
+      # shellcheck disable=SC2053
+      [[ $prefix == $glob ]] && return 0
+    done
+  done < <(jq -r '.permissions.deny[] | select(startswith("Write(") or startswith("Edit("))' "$1")
+  return 1
+}
+
+scenario_ux_profile() { # make runner-init output: the ux-tester can write its report
+  setup
+  mkdir -p "$TMP/runner" "$TMP/profiles/ux-tester"; cp "$RUNNER_DIR/init.sh" "$TMP/runner/"   # no .env next to the copy
+  echo '{"permissions": {"deny": ["Write(./*)"]}}' > "$TMP/profiles/ux-tester/settings.json"   # an old profile
+  env -u RUNNER_SHARE_LOGIN PROFILES_DIR="$TMP/profiles" MARKETPLACE_PATH="$TMP" bash "$TMP/runner/init.sh" >>"$TMP/init.log" 2>&1
+  local settings=$TMP/profiles/ux-tester/settings.json
+  deny_covers "$settings" .runner/accept/x/report.md; assert_eq "ux-profile: no deny rule covers the report" 1 "$?"
+  deny_covers "$settings" repos/django/x/a.py; assert_eq "ux-profile: repos stay denied" 0 "$?"
+  assert_eq "ux-profile: report dir allowed" 1 "$(jq '[.permissions.allow[] | select(. == "Write(./.runner/accept/**)")] | length' "$settings")"
+  teardown
+}
+
 main() {
   command -v jq >/dev/null || { echo "jq missing"; exit 1; }
   command -v flock >/dev/null || { echo "flock missing"; exit 1; }
@@ -418,5 +610,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks)
+SCENARIOS=(green no_commit_ok red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks gate_negation streams_pick streams_parallel streams_mid_claim_plan streams_sync streams_sync_conflict accept_guards ux_profile)
 main "$@"

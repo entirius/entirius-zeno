@@ -7,7 +7,9 @@
 4. **Task runner**: when the repo has a `Makefile`, use its canon (`make check`, `make test`, `make fix`).
 5. **Django modules**: layered layout (models / schemas / services / api), `django_utils.BaseModel`, API v2 +
    Pydantic (no DRF serializers), `IsAdminUser` on admin endpoints, throttle public endpoints, field whitelist
-   in services, no `str(e)` in 500 responses. Rules: `~/.claude/rules/entirius-backend/` (loaded by the plugins).
+   in services, no `str(e)` in 500 responses. Global rules are loaded into your profile by `make runner-init`.
+   A skill or rule that points to `~/.claude/rules-on-demand/<plugin>/<file>` means `.runner/rules-on-demand/<plugin>/<file>`
+   (`~/.claude/**` is denied to runner roles).
 6. **Git**: Conventional Commits; the runner prepared the branch — never create/switch branches, never push;
    `master`/`main`/`develop` are untouchable.
 7. **Secrets — zero tolerance**: no keys, tokens, passwords or client names in code, tests, fixtures, commits.
@@ -17,3 +19,5 @@
 9. **No generated artefacts** in commits (`__pycache__`, caches, build, `node_modules`); `uv.lock` IS committed.
 10. **Harness**: `make dev` only (never `make up`); `docker compose logs service` is the truth; BDD gates need a
     fresh `make seed`; restart `worker` after Celery task changes; edit `docker/settings_local.py`, never the clone's.
+11. **CMS (`entirius-pwa-cms`)**: UI rules are the repo's `docs/ui-rules.md`; read it before any UI change. `npm run lint:ui`
+    must add no warning in files you touched.

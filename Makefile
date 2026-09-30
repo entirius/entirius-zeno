@@ -1,4 +1,4 @@
-.PHONY: lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -9,7 +9,7 @@ COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROFILES = --profile infra --profile service
 # pwa/cms are opt-in (started by their own targets), but teardown and introspection
 # must always see the whole stack — otherwise frontends outlive `down`/`clean`.
-ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile docs --profile www --profile embed
+ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile cms-s2 --profile docs --profile www --profile embed
 # Embedding service: EMBED_GPU=1 layers the CUDA + GPU (CDI) override on the dev compose.
 # Auto-detected from the CDI spec; .env or the command line override it.
 EMBED_GPU ?= $(shell test -f /etc/cdi/nvidia.yaml && echo 1 || echo 0)
@@ -29,6 +29,9 @@ help:  ## List targets
 init:  ## Create .env from template + repos/ layout
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa repos/docs repos/www
+
+setup:  ## One command to a seeded stack: clones, dev stack, mail, CMS, toolbox check, seed (REFS=release|develop EMBED=1 SEED=0)
+	@python3 scripts/setup.py
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
@@ -123,7 +126,7 @@ lookup-eval:  ## Measure lookup precision/recall on the labelled pairs of the te
 
 module-test:  ## Run a mounted module's tests in the service container: make module-test MODULE=entirius-django-x
 	@echo "$(MODULE)" | grep -Eq '^[A-Za-z0-9._-]+$$' || { echo "ERROR: MODULE is required (e.g. make module-test MODULE=entirius-django-lookup)"; exit 1; }
-	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
+	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && { ! grep -q "^test *=" pyproject.toml || uv pip install -q --python "$$(command -v python)" -e ".[test]"; } && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
 
 down:  ## Stop everything
 	$(COMPOSE_DEV) $(ALL_PROFILES) down
@@ -156,6 +159,8 @@ urls:  ## URLs and ports of running services
 	[ -n "$$p" ] && { echo "  www          http://localhost:$$p  (branch: $(WWW_BRANCH))"; up=1; }; \
 	p=$$($(COMPOSE) --profile embed port embed 7997 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  embed        http://localhost:$$p  (embeddings; /docs, /models)"; up=1; }; \
+	p=$$($(COMPOSE) port greenmail 8080 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  greenmail    http://localhost:$$p  (REST; SMTP $$($(COMPOSE) port greenmail 3025 | cut -d: -f2), IMAP $$($(COMPOSE) port greenmail 3143 | cut -d: -f2); sandbox/sandbox)"; up=1; }; \
 	p=$$($(COMPOSE) port db 5432 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  postgres     localhost:$$p  ($${POSTGRES_USER:-entirius}/$${POSTGRES_PASSWORD:-entirius-dev}, db: $${POSTGRES_DB:-entirius})"; up=1; }; \
 	p=$$($(COMPOSE) port redis 6379 2>/dev/null | cut -d: -f2); \
@@ -206,6 +211,13 @@ cms-dev:  ## Start the admin CMS from repos/pwa/entirius-pwa-cms (hot reload)
 		  echo "  git clone git@github.com:entirius/entirius-pwa-cms.git repos/pwa/entirius-pwa-cms"; exit 1; }
 	@$(MAKE) --no-print-directory cms COMPOSE="$(COMPOSE_DEV)"
 
+cms-dev-s2:  ## Second CMS dev server on :8181 from the worktree repos/pwa/entirius-pwa-cms-s2 (dev-runner stream 2)
+	@test -e repos/pwa/entirius-pwa-cms-s2/.git || \
+		{ echo "ERROR: no worktree — run:"; \
+		  echo "  git -C repos/pwa/entirius-pwa-cms worktree add -b <branch>-s2 ../entirius-pwa-cms-s2 <branch>"; exit 1; }
+	@$(COMPOSE_DEV) $(PROFILES) --profile cms-s2 up -d cms-s2
+	@$(MAKE) --no-print-directory urls
+
 frontends: pwa cms  ## Start both frontends
 
 clone-docs:  ## Clone the documentation portal (private GitLab) into repos/docs/
@@ -224,17 +236,39 @@ seed:  ## Seed the service with the Emporium test package (fixtures + full impor
 	SVC_DIR=/entirius/services/$(SERVICE) \
 	DB_USER=$${POSTGRES_USER:-entirius} \
 	DB_NAME=$${POSTGRES_DB:-entirius} \
+	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
 	bash $(TESTS_PATH)/$(TESTS_REPO)/scripts/seed.sh
 
 # -@spec-first: scenarios ahead of their module; -@blocked-by-module: known module gaps (registry)
 bdd:  ## Run the BDD suite against the running service (TAGS=@tag optional)
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
+	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) bdd TAGS=$(TAGS)
 
 e2e:  ## Run Playwright e2e (storefront + CMS) against the running frontends
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
-	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100}
+	E2E_DEVICE="$(E2E_DEVICE)" \
+	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100} E2E_ARGS="$(E2E_ARGS)"
+
+mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and wait until it is ready
+	@$(COMPOSE) $(PROFILES) up -d greenmail
+	@url=http://localhost:$${GREENMAIL_API_PORT:-8380}/api/service/readiness; \
+	for i in $$(seq 30); do curl -fsS -o /dev/null --max-time 2 $$url 2>/dev/null && break; \
+		[ $$i -eq 30 ] && { echo "greenmail not ready after 30s - docker compose logs greenmail"; exit 1; }; sleep 1; done
+	@$(MAKE) --no-print-directory urls
+
+toolbox-check:  ## Verify the AI toolbox answers for AI_TOOLBOX_CHANNEL and exposes only fake models
+	@sh scripts/toolbox-check.sh
+
+# The funnel test file itself ships with plan 13; phone first, then desktop.
+e2e-funnel:  ## Run the leads funnel e2e twice: iPhone 14 emulation, then desktop
+	@$(MAKE) --no-print-directory e2e E2E_ARGS=e2e/cms/test_leads_funnel.py E2E_DEVICE="iPhone 14"
+	@$(MAKE) --no-print-directory e2e E2E_ARGS=e2e/cms/test_leads_funnel.py E2E_DEVICE=
+
+e2e-accept:  ## AI-tester acceptance run of the funnel (ux-tester role, plan 13)
+	@test -f $$HOME/.claude-runner/ux-tester/settings.json || { echo "ux-tester role not registered (plan 13)"; exit 1; }
+	@bash scripts/dev-runner/accept.sh
 
 # --- dev-runner (scripts/dev-runner): executes todo/<topic>/dev-plans one plan per tick ---
 PLANS ?= todo/product-lookup-dedup/dev-plans
@@ -248,10 +282,10 @@ runner-dry:  ## Dry run: pick the next plan, change nothing
 runner-test:  ## Runner mock suite (zero tokens)
 	@scripts/dev-runner/tests/run-local.sh
 
-runner-init:  ## Create role profiles ~/.claude-runner/{coder,reviewer,triage} (idempotent)
+runner-init:  ## Create role profiles ~/.claude-runner/{coder,reviewer,triage,ux-tester} (idempotent)
 	@scripts/dev-runner/init.sh
 
-runner-loop:  ## Tick every 5 min until scripts/dev-runner/STOP exists (sleep inhibited)
+runner-loop:  ## Tick every minute until scripts/dev-runner/STOP exists (sleep inhibited; STREAM=2 for a second loop)
 	@scripts/dev-runner/loop.sh $(PLANS)
 
 runner-status:  ## Plans table, journal tail, today's spend

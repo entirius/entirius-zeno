@@ -9,7 +9,8 @@ load_env
 echo "== plans: $PLANS_DIR"
 while IFS= read -r f; do
   [[ $(basename "$f") == 00-* ]] && continue
-  printf '  %-34s %s\n' "$(basename "$f")" "$(plan_header "$f" STATUS)"
+  st=$(plan_stream "$f"); [[ $st == 1 ]] && st="" || st=s$st
+  printf '  %-34s %-8s %s\n' "$(basename "$f")" "$(plan_header "$f" STATUS)" "$st"
 done < <(plan_list)
 echo "== journal (last 5)"; tail -5 "$PLANS_DIR/JOURNAL.md" 2>/dev/null || echo "  (none)"
 spend=$SPEND_DIR/spend-$(date +%F).log

@@ -4,7 +4,7 @@
 set -euo pipefail
 RUNNER_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PLANS=${1:?usage: loop.sh <plans-dir>}
-: "${LOOP_SLEEP:=300}"
+: "${LOOP_SLEEP:=60}"   # an idle tick costs nothing; a finished plan should not wait minutes for the next
 if [[ -z ${RUNNER_INHIBITED:-} ]] && command -v systemd-inhibit >/dev/null; then
   RUNNER_INHIBITED=1 exec systemd-inhibit --what=sleep:idle --who=dev-runner --why="dev-runner loop" "$0" "$PLANS"
 fi

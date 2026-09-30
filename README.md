@@ -18,6 +18,21 @@ BDD suite) · [doc/howto-develop.md](doc/howto-develop.md) (dev mode, hot reload
 
 ## Quick start
 
+One command from a fresh checkout to a seeded, testable stack (clones, dev mode, mail sandbox, CMS,
+AI toolbox check, seed):
+
+```bash
+git clone https://github.com/entirius/entirius-zeno.git && cd entirius-zeno
+make setup                 # modules at the service uv.lock versions (released)
+make setup REFS=develop    # every clean clone on develop (integration)
+make bdd && make e2e-funnel
+```
+
+`make setup` never fails on a missing AI toolbox: it reports DEGRADED mode (AI drafts end `failed`, leads intel is
+skipped, the AI BDD scenarios fail) and seeds anyway. Options: `EMBED=1` (embedding service for lookup), `SEED=0`.
+
+The individual steps, for a baked (non-dev) stack:
+
 ```bash
 git clone https://github.com/entirius/entirius-zeno.git
 cd entirius-zeno

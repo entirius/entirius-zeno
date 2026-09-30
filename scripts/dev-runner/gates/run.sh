@@ -11,6 +11,10 @@ if [[ -z ${block//[[:space:]]/} ]]; then
   echo "gate: no block in $(basename "$plan") — using DEFAULT.sh"
   cp "$RUNNER_DIR/gates/DEFAULT.sh" "$script"
 else
+  # bash never exits on a failed `! cmd` under set -e, so a "must not match" line would always pass: every line that
+  # starts with `! ` becomes an explicit check (set -x still traces the command and prints what matched). Exit 1 = no
+  # match = pass; 0 = matched and ≥ 2 = the check itself failed (a missing path) — both fail the gate.
+  block=$(sed -E 's/^! (.+)$/rc=0; \1 || rc=$?; [ "$rc" -eq 1 ] || { echo "gate: must-not-match check rc=$rc (0 = matched, >1 = error)" >\&2; exit 1; }/' <<<"$block")
   printf '#!/usr/bin/env bash\nset -euo pipefail\nset -x\n%s\n' "$block" > "$script"
 fi
 # set -x traces expanded values into gate.log (triage input, archived) — drop secret-bearing env first;
