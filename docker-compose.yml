@@ -2,7 +2,9 @@ services:
   # --- Infrastructure ---------------------------------------------------
 
   db:
-    image: postgres:16-alpine
+    # pgvector build of Postgres 16 (lookup module: vector + pg_trgm + unaccent). Extensions are
+    # created by module migrations — the harness only guarantees they are available.
+    image: pgvector/pgvector:pg16
     profiles: [infra]
     ports:
       - "${POSTGRES_PORT:-5532}:5432"
@@ -63,6 +65,7 @@ services:
       args:
         service: ${SERVICE:-entirius-service-volkanos}
         branch: ${SERVICE_BRANCH:-master}
+        ref: ${SERVICE_REF:-unknown}
     profiles: [service]
     tty: true
     ports:
@@ -72,8 +75,258 @@ services:
       DEBUG: "true"
       ALLOWED_HOSTS: localhost,127.0.0.1,service
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
+      EMBED_DIM: ${EMBED_DIM:-1152}
+      # AI toolbox runs outside zeno (its own repo on the host, or the test deployment).
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
+      OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
+      OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
+      OUTREACH_SMTP_USER: ${OUTREACH_SMTP_USER:-sandbox}
+      OUTREACH_SMTP_PASSWORD: ${OUTREACH_SMTP_PASSWORD:-sandbox}
+      OUTREACH_SMTP_USE_SSL: ${OUTREACH_SMTP_USE_SSL:-false}
+      OUTREACH_SMTP_USE_TLS: ${OUTREACH_SMTP_USE_TLS:-false}
+      OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
+      # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
+      ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Emporium test package (make clone-tests) — seed scripts and QMS csv_path expect this path
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      # LEADS_IMPORT_TMP_DIR: the queued CSV import written here is read by the worker
+      - leads_import_tmp:/tmp/django_leads
     depends_on:
       db:
+        condition: service_healthy
+    networks:
+      - zeno
+
+  # --- Frontends (storefront + admin CMS) --------------------------------
+
+  # No environment block: the storefront is configured only by _CONFIG/*.json,
+  # imported statically and therefore baked in at image build (see Dockerfile.pwa).
+  pwa:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pwa
+      args:
+        repo: entirius-pwa-storefront
+        branch: ${PWA_BRANCH:-develop}
+        ref: ${PWA_REF:-unknown}
+        # One URL serves both callers (server components in the container, browser
+        # on the host), so it has to be the host one — the container forwards that
+        # port to the service (Dockerfile.pwa CMD).
+        api_base_url: http://localhost:${SERVICE_PORT:-8100}
+        channel: ${PWA_CHANNEL:-default-europe}
+        checkout_key: ${CHECKOUT_API_KEY:-entirius-docker-checkout-dev-key-2026}
+    profiles: [pwa]
+    ports:
+      - "${PWA_PORT:-3100}:3000"
+    networks:
+      - zeno
+
+  cms:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cms
+      args:
+        repo: entirius-pwa-cms
+        branch: ${CMS_BRANCH:-develop}
+        ref: ${CMS_REF:-unknown}
+    profiles: [cms]
+    ports:
+      - "${CMS_PORT:-8180}:8080"
+    environment:
+      # SPA — the browser talks to the service host port directly.
+      VUE_APP_API_URL: http://localhost:${SERVICE_PORT:-8100}
+      VUE_APP_CHANNEL: ${PWA_CHANNEL:-default-europe}
+      VUE_APP_PANELS: pages,pim,points
+      VUE_APP_LANG: EN
+    networks:
+      - zeno
+
+  # Documentation portal — served from the repos/docs/ clone (private GitLab, see
+  # make clone-docs) with hot reload; host port shifted +100 from Astro's 4321.
+  docs:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.docs
+    profiles: [docs]
+    ports:
+      - "${DOCS_PORT:-4421}:4321"
+    volumes:
+      - ${DOCS_PATH:-./repos/docs}/entirius-docs:/entirius/docs
+      - docs_node_modules:/entirius/docs/node_modules
+    networks:
+      - zeno
+
+  # Second docs instance for a feature branch, side by side with develop (make docs-alt).
+  docs-alt:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.docs
+    profiles: [docs]
+    ports:
+      - "${DOCS_ALT_PORT:-4422}:4321"
+    volumes:
+      - ${DOCS_PATH:-./repos/docs}/entirius-docs-${DOCS_ALT_BRANCH:-alt}:/entirius/docs
+      - docs_alt_node_modules:/entirius/docs/node_modules
+    networks:
+      - zeno
+
+  # Marketing site entirius.com — Next.js dev server from repos/www/ (make www WWW_BRANCH=x).
+  www:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.www
+    profiles: [www]
+    ports:
+      - "${WWW_PORT:-3200}:3000"
+    environment:
+      NEXT_PUBLIC_BASE_URL: http://localhost:${WWW_PORT:-3200}
+      ALLOWED_HOSTS: localhost,localhost:${WWW_PORT:-3200}
+    volumes:
+      - ${WWW_PATH:-./repos/www}/entirius-react-www-${WWW_BRANCH:-master}:/entirius/www
+      - www_node_modules:/entirius/www/node_modules
+      - www_next:/entirius/www/.next
+    networks:
+      - zeno
+
+  # Zeno Suite — a generated dashboard (make dashboard) of the live stack: real ports,
+  # which volkanos packages are editable from repos/ vs baked, test packages present.
+  dashboard:
+    image: python:3.12-slim
+    profiles: [service]
+    command: ["python", "-m", "http.server", "8080", "--directory", "/srv"]
+    ports:
+      - "${DASHBOARD_PORT:-8200}:8080"
+    volumes:
+      - ./docker/dashboard:/srv:ro
+    networks:
+      - zeno
+
+  # Static HTTP for the test package (supplier feed downloads — the feed connector
+  # speaks HTTP only). In-network only: no host port.
+  fixtures:
+    image: python:3.12-slim
+    profiles: [service]
+    command: ["python", "-m", "http.server", "8000", "--directory", "/entirius/test-package"]
+    volumes:
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+    networks:
+      - zeno
+
+  # Mail sandbox: every outgoing mail of the stack lands here (make mail). Containers use
+  # greenmail:3025 (SMTP) / 3143 (IMAP) / 8080 (REST); the host reaches the published ports.
+  greenmail:
+    image: greenmail/standalone:2.1.13
+    profiles: [service]
+    ports:
+      - "${GREENMAIL_SMTP_PORT:-3125}:3025"
+      - "${GREENMAIL_IMAP_PORT:-3243}:3143"
+      - "${GREENMAIL_API_PORT:-8380}:8080"
+    environment:
+      GREENMAIL_OPTS: -Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled -Dgreenmail.users=sandbox:sandbox@greenmail.test
+    healthcheck:
+      # The image ships bash + java only (no wget/curl/nc) — probe readiness over /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /api/service/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - zeno
+
+  # Celery worker — required by `make seed` (QMS quantities import runs as tasks).
+  # Same image as the service; in dev mode it runs the BAKED code (no hot reload).
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        service: ${SERVICE:-entirius-service-volkanos}
+        branch: ${SERVICE_BRANCH:-master}
+        ref: ${SERVICE_REF:-unknown}
+    profiles: [service]
+    # Queue list is duplicated in docker-compose.dev.yml (the dev command replaces this one) — change both.
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      ALLOWED_HOSTS: localhost,127.0.0.1,service
+      DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
+      EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
+      OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
+      OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
+      OUTREACH_SMTP_USER: ${OUTREACH_SMTP_USER:-sandbox}
+      OUTREACH_SMTP_PASSWORD: ${OUTREACH_SMTP_PASSWORD:-sandbox}
+      OUTREACH_SMTP_USE_SSL: ${OUTREACH_SMTP_USE_SSL:-false}
+      OUTREACH_SMTP_USE_TLS: ${OUTREACH_SMTP_USE_TLS:-false}
+      OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
+      # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
+      ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      - leads_import_tmp:/tmp/django_leads
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zeno
+
+  # Celery beat — the real cadence of CELERY_BEAT_SCHEDULE (docker/settings_local.py) for the
+  # leads platform; BDD calls the modules' test endpoints instead of waiting for it.
+  beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        service: ${SERVICE:-entirius-service-volkanos}
+        branch: ${SERVICE_BRANCH:-master}
+        ref: ${SERVICE_REF:-unknown}
+    profiles: [service]
+    command: ["celery", "-A", "main", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      ALLOWED_HOSTS: localhost,127.0.0.1,service
+      DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
+      EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
+      EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
+      AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
+      AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
+      OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
+      OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
+      OUTREACH_SMTP_USER: ${OUTREACH_SMTP_USER:-sandbox}
+      OUTREACH_SMTP_PASSWORD: ${OUTREACH_SMTP_PASSWORD:-sandbox}
+      OUTREACH_SMTP_USE_SSL: ${OUTREACH_SMTP_USE_SSL:-false}
+      OUTREACH_SMTP_USE_TLS: ${OUTREACH_SMTP_USE_TLS:-false}
+      OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
+      # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
+      ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - zeno
@@ -82,6 +335,11 @@ volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  docs_node_modules:
+  docs_alt_node_modules:
+  www_node_modules:
+  www_next:
+  leads_import_tmp:
 
 networks:
   zeno:

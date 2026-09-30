@@ -14,3 +14,20 @@ repos/
 .idea/
 .vscode/
 .DS_Store
+
+# Generated Zeno Suite dashboard
+docker/dashboard/index.html
+
+# Playwright MCP session artifacts (snapshots, console logs) from /browser
+.playwright-mcp/
+
+# planning & execution layers stay local (roadmap/ analyses, todo/ dev-plans)
+roadmap/
+todo/
+__pycache__/
+backups/
+test-results/
+scripts/dev-runner/STOP
+scripts/dev-runner/.env
+.runner/
+node_modules/

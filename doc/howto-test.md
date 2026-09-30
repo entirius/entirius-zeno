@@ -1,0 +1,173 @@
+# How to test the platform with zeno
+
+Zeno runs a full Entirius/Volkanos service with its infrastructure and hands you one
+interface — `make`. This guide is for **verifying the platform**: seeding demo data,
+exploring the running stack, running the BDD suite.
+Developing modules or the service: [howto-develop.md](howto-develop.md).
+Command reference: [README](../README.md).
+
+## First run (5 commands)
+
+```bash
+make init         # .env + repos/ layout
+make clone-tests  # test package — bind-mounted into the stack, so clone it before `up`
+make build        # bake the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
+make up           # postgres + redis + rabbitmq + service + celery worker + fixtures http
+make seed         # Emporium demo dataset: products, prices, stock, discounts (~15-25 min)
+```
+
+Then look around:
+
+| What | Where |
+|---|---|
+| Admin panel | http://localhost:8100/admin/ — `admin` / `admin123` |
+| Swagger UI | http://localhost:8100/api/schema/swagger-ui/ |
+| Products API | http://localhost:8100/api/matrix/v2/default-europe/products/?page_size=100 |
+| A cart with a discount | POST `/api/checkout/1/default-europe/carts/` with header `X-API-KEY: entirius-docker-checkout-dev-key-2026` |
+
+The seed prints step timers (`[65s] Step 2: Load Fixtures`) and ends with `SEED OK in Ns` —
+if it dies it names the failed step (`SEED FAILED (exit N) during: ...`).
+
+## Running the BDD suite
+
+```bash
+make bdd                      # ~647 behave scenarios over HTTP (~5 min; @harness needs make mail)
+make bdd TAGS=@matrix-v2      # one area only
+make bdd TAGS=@checkout       # tag list: repos/tests/*/README.md
+```
+
+The suite is a black-box API consumer: it reads expectations from the dataset's CSV files,
+so it verifies whatever the package actually seeded — no hardcoded values.
+
+Two tags are excluded by default (see the test repo README):
+`@spec-first` (scenarios written ahead of their module) and `@blocked-by-module`
+(known module gaps, tracked internally).
+
+**Fresh measurement = fresh database.** Some suites assume seed-order state
+(e.g. supplier fixtures at fixed primary keys). The canonical gate run is always:
+
+```bash
+make seed
+make bdd
+```
+
+## Lookup / dedup
+
+The lookup engine has its own measurable gate on top of BDD — it answers "how well does it match?",
+which a pass/fail suite cannot:
+
+```bash
+make embed                    # embedding service (:8097, loopback); GPU auto-detected
+make seed                     # includes the lookup fixtures (60 PIM + 60 atlas rows, 120 photos)
+make bdd TAGS=@lookup         # the flows: EAN match, image search, create hook, proposal accept
+make lookup-eval              # precision/recall on 240 labelled pairs
+```
+
+`make lookup-eval` prints two sweeps (positives = `match`, and `match+variant`), the confusion matrix by
+label, and the recall of each blocking leg measured in isolation. The numbers in `AGENTS.md` come from a run
+exactly like this on a fresh seed — **re-measure after any change to scoring, fixtures or the embedding
+model, and never derive a number you did not run**.
+
+Debugging a bad answer, in this order:
+
+```bash
+docker compose --profile infra --profile service exec -T service python manage.py lookup_doctor
+docker compose --profile infra --profile service exec -T service python manage.py lookup_reconcile
+docker compose --profile infra --profile service exec -T service python manage.py lookup_backfill --images
+```
+
+If the image leg simply misses too much, its depth is three settings — `LOOKUP_HNSW_EF_SEARCH`,
+`LOOKUP_IMAGE_TOP_K`, `LOOKUP_PHASH_MAX_DISTANCE` — set in `docker/settings_local.py`. Ready-made profiles
+and the recall-vs-latency trade-off live in the module's `docs/operations.md` (§Deepening the image search).
+The baseline row in `AGENTS.md` was measured at the defaults, so a run with a deeper profile is a different
+measurement and must be labelled as one.
+
+`lookup_doctor` reports how many fingerprints exist, how many carry hashes and vectors, and whether any row
+was embedded with a different model than the one configured now.
+
+## Leads funnel / mail
+
+The leads platform sends and reads real mail, and asks a model for drafts. Zeno keeps both inside the
+room: mail goes to a GreenMail container, model calls go to a toolbox whose test channel only sees `fake`
+models.
+
+```bash
+make mail                     # GreenMail: SMTP :3125, IMAP :3243, REST :8380 (sandbox/sandbox)
+make toolbox-check            # toolbox reachable, AI_TOOLBOX_CHANNEL sees fake models only
+make seed                     # also purges the mailbox ("GreenMail purged." in Step 1)
+make bdd TAGS=@harness        # SMTP -> GreenMail -> REST, and an IMAP-injected reply
+```
+
+`@harness` proves the plumbing, not a module: a mail sent over SMTP is readable through the REST API, and a
+fixture reply injected with IMAP APPEND carries the `In-Reply-To` the test asked for. Module suites build on
+the same helpers (`entirius_tests.mail`, `entirius_tests.clock`). `make toolbox-check` failing on a non-fake
+model is the point — a real model visible to the zeno channel means BDD spends real money.
+
+Debugging, in this order:
+
+```bash
+docker compose --profile infra --profile service ps greenmail      # healthy?
+curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # what actually arrived
+docker compose --profile infra --profile service exec -T worker celery -A main inspect active_queues
+```
+
+### The funnel (`@funnel`)
+
+The reference scenario of the leads platform — a CSV row to a reply in the notification bar, over the admin API
+only. Guide with all three modes: entirius-docs `guides/leads-end-to-end-testing.md` (`make docs`).
+
+```bash
+make dev                      # service, worker, beat, GreenMail
+make toolbox-check            # before seed — rules call the toolbox while the seed runs
+make migrate && make seed     # SEED OK; asserts munin lists leads, communicator, siteintel, notifications
+make bdd TAGS=@funnel         # scenarios Funnel 0 … Funnel 8, one per step
+```
+
+It proves the four modules are wired into Volkanos (apps, urls, queues, fixtures) and hand work to each other:
+import → stage rule → audit → analysis → draft → review → sandbox send → reply → stage `replied` → escalation
+mail. It is one-shot: re-run only after a fresh `make seed`. Beat runs the real cadence
+(`CELERY_BEAT_SCHEDULE` in `docker/settings_local.py`), but the scenario never waits for it — it calls the
+modules' `test/` endpoints.
+
+Debugging, in this order:
+
+```bash
+docker compose --profile infra --profile service logs worker       # rules, analysis, stage reactions
+docker compose --profile infra --profile service logs beat         # schedule loaded, tasks sent
+curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # mail that actually arrived
+curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8100/api/leads/v2/admin/default-europe/activities/?company=<id>"
+```
+
+The company timeline names the reason when a rule refuses to act (`skipped: no hooks`, `blocked: do_not_contact`).
+
+Gotchas:
+
+- GreenMail is purged by seed, not by scenarios — mailbox assertions count relative to a count saved in the
+  same scenario, never absolute.
+- The toolbox must be up before `make seed` — `make toolbox-check` green first; it runs outside zeno.
+
+A mail that never arrives is usually a queue nobody consumes (worker `-Q` differs between
+`docker-compose.yml` and `docker-compose.dev.yml`) or a channel without an entry in
+`EMAIL_SMTP_CONFIGURATION_CHANNELS` (`docker/settings_local.py`).
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `make seed` fails at the celery check | worker not up — `docker compose ps worker` |
+| Products have no stock/prices in carts | QMS chain didn't settle — the seed waits for sentinel SKUs; reseed if in doubt |
+| Feed download scenarios fail with “Internal host blocked” | dev-only `SUPPLIER_BLOCK_PRIVATE_HOSTS = False` missing from `docker/settings_local.py` |
+| Suite red after incremental reruns | state drift — run the canonical `make seed && make bdd` |
+| Stack wedged beyond repair | `make clean` (drops volumes) → `make up` → `make seed` |
+| `@lookup` scenarios or `lookup-eval` find nothing | fingerprints missing — `lookup_doctor`, then `lookup_backfill` (a plain `make dev` does not backfill) |
+| One fixture photo returns 19 `image_near_exact` hits | expected, not a bug — the lookup fixtures are generated shapes (3 shapes × a solid colour on white), and pHash is a grayscale DCT, so colour-only variants collapse onto the same hash. That is why `image_near_exact` scores only 10 and the text legs decide. Real catalog photography is far more selective; do not tune thresholds against this artefact |
+| Image search returns text-only hits + a warning | the `embed` service is down — `make embed`; the engine degrades on purpose instead of failing |
+| Module tests fail with "cannot resolve host" | containers had no DNS; `docker-compose.dev.yml` pins `DOCKER_DNS_1/2` (default 1.1.1.1/8.8.8.8) |
+
+## What the Emporium dataset gives you
+
+Two channels (`default-local` USD, `default-europe` EUR/PLN), 35 products
+(simple / configurable / bundle / custom, incl. slash-SKU edge cases), nested categories,
+attributes and PIM feature sets, prices + omnibus history, stock via QMS, 10 discount
+rules, demo suppliers with an HTTP feed, accounts groups, CMS content.
+Dataset details: `repos/tests/entirius-test-package-emporium/package/README.md`.

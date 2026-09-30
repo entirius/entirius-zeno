@@ -19,11 +19,14 @@ uv sync --frozen
 
 # uv sync is exact (drops previous editable links) — re-link after every sync
 linked=0
+# One module failing to build must not abort linking the rest (set -e is on).
 for dir in /entirius/py/*/ /entirius/django/*/; do
     [ -f "${dir}pyproject.toml" ] || continue
-    uv pip install --no-deps --quiet -e "${dir}"
-    echo "  linked: ${dir}"
-    linked=$((linked + 1))
+    if uv pip install --no-deps --quiet -e "${dir}"; then
+        linked=$((linked + 1))
+    else
+        echo "  link FAILED: ${dir}"
+    fi
 done
 echo "=== Dev mode: ${linked} local module(s) linked ==="
 

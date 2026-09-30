@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+# Documentation portal (Astro/Starlight) — the repo is private on GitLab, so the clone
+# is bind-mounted from repos/docs/ (make clone-docs) instead of built from GitHub.
+FROM node:22-slim
+
+# d2 — ER diagrams (astro-d2 is enabled only when the CLI is on PATH)
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl make \
+    && curl -fsSL https://d2lang.com/install.sh | sh -s -- \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
+
+WORKDIR /entirius/docs
+
+COPY docker/entrypoint-docs.sh /usr/local/bin/entrypoint-docs.sh
+RUN chmod +x /usr/local/bin/entrypoint-docs.sh
+
+EXPOSE 4321
+ENTRYPOINT ["entrypoint-docs.sh"]
+CMD ["pnpm", "run", "dev", "--host", "0.0.0.0", "--port", "4321"]

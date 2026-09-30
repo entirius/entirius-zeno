@@ -1,8 +1,15 @@
 # Development overrides — mounts local clones from repos/ for hot reload.
 # Usage: make dev (requires `make clone` first — the mount hides the baked-in service).
 
+# Module suites resolve public hostnames (SSRF-guard tests: example.com, api.voyageai.com). Docker's embedded
+# resolver forwards to the host's nameservers, which are unreachable from the bridge on some setups — point the
+# upstreams at a public resolver instead (service discovery still goes through 127.0.0.11).
+x-dns: &dns
+  dns: ["${DOCKER_DNS_1:-1.1.1.1}", "${DOCKER_DNS_2:-8.8.8.8}"]
+
 services:
   service:
+    <<: *dns
     entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
     command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
     volumes:
@@ -13,6 +20,118 @@ services:
       - ${DJANGO_PATH:-./repos/django}:/entirius/django
       # shadows the host clone's .venv — the container keeps its own env in the project dir
       - service_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+      # LEADS_IMPORT_TMP_DIR shared with the worker (also in docker-compose.yml)
+      - leads_import_tmp:/tmp/django_leads
+
+  # Dev worker: same mounts + editable-install entrypoint as `service`, so celery
+  # runs the local module clones (baked image lacks the private atlas/pricefighter
+  # modules entirely). -Q additionally consumes the atlas_* queues the baked
+  # command ignores; every other queue must match docker-compose.yml. Own venv
+  # volume — sharing service_venv would race two concurrent `uv sync` runs at stack start.
+  worker:
+    <<: *dns
+    entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,atlas_default,atlas_images,atlas_results,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
+    volumes:
+      - ./docker/entrypoint-dev.sh:/entirius/docker/entrypoint-dev.sh:ro
+      - ./docker/settings_local.py:/entirius/docker/settings_local.py:ro
+      - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
+      - ${SERVICES_PATH:-./repos/services}:/entirius/services
+      - ${PY_PATH:-./repos/py}:/entirius/py
+      - ${DJANGO_PATH:-./repos/django}:/entirius/django
+      - worker_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+      - leads_import_tmp:/tmp/django_leads
+
+  # Dev beat: same mounts + entrypoint as the dev worker so it loads the mounted modules' schedule;
+  # own venv volume for the same reason as the worker (no concurrent `uv sync` on one venv).
+  beat:
+    <<: *dns
+    entrypoint: ["/entirius/docker/entrypoint-dev.sh"]
+    volumes:
+      - ./docker/entrypoint-dev.sh:/entirius/docker/entrypoint-dev.sh:ro
+      - ./docker/settings_local.py:/entirius/docker/settings_local.py:ro
+      - ${SERVICES_PATH:-./repos/services}:/entirius/services
+      - ${PY_PATH:-./repos/py}:/entirius/py
+      - ${DJANGO_PATH:-./repos/django}:/entirius/django
+      - beat_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+
+  # make cms-dev — the CMS container already runs `npm run serve`, so mounting the clone
+  # over the image's GitHub checkout gives hot reload straight from repos/pwa/.
+  cms:
+    volumes:
+      - ${PWA_PATH:-./repos/pwa}/entirius-pwa-cms:/entirius/pwa/entirius-pwa-cms
+      # shadows the host clone's node_modules — the named volume is seeded from the
+      # image's `npm ci`, so a changed package.json needs the volume dropped:
+      # docker volume rm ${COMPOSE_PROJECT_NAME:-entirius-zeno}_cms_node_modules
+      - cms_node_modules:/entirius/pwa/entirius-pwa-cms/node_modules
+    # The volume is seeded from the image's GitHub checkout; a clone with new dependencies re-installs once:
+    # `npm ci` runs when package-lock.json no longer matches the stamp written after the last install.
+    command:
+      - sh
+      - -c
+      - >-
+        h=$$(sha256sum package-lock.json | cut -c1-64);
+        [ "$$(cat node_modules/.zeno-lock 2>/dev/null)" = "$$h" ] || { npm ci --no-audit --no-fund && echo "$$h" > node_modules/.zeno-lock; };
+        exec npm run serve -- --host 0.0.0.0 --port 8080
+
+  # make cms-dev-s2 — a second CMS dev server for dev-runner stream 2: the git worktree
+  # repos/pwa/entirius-pwa-cms-s2 on :8181, same image, API and install stamp as `cms`
+  # (scripts/dev-runner/README.md, Streams).
+  cms-s2:
+    image: ${COMPOSE_PROJECT_NAME:-entirius-zeno}-cms
+    profiles: [cms-s2]
+    ports:
+      - "${CMS_S2_PORT:-8181}:8080"
+    environment:
+      VUE_APP_API_URL: http://localhost:${SERVICE_PORT:-8100}
+      VUE_APP_CHANNEL: ${PWA_CHANNEL:-default-europe}
+      VUE_APP_PANELS: pages,pim,points
+      VUE_APP_LANG: EN
+    volumes:
+      - ${PWA_PATH:-./repos/pwa}/entirius-pwa-cms-s2:/entirius/pwa/entirius-pwa-cms
+      - cms_s2_node_modules:/entirius/pwa/entirius-pwa-cms/node_modules
+    command:
+      - sh
+      - -c
+      - >-
+        h=$$(sha256sum package-lock.json | cut -c1-64);
+        [ "$$(cat node_modules/.zeno-lock 2>/dev/null)" = "$$h" ] || { npm ci --no-audit --no-fund && echo "$$h" > node_modules/.zeno-lock; };
+        exec npm run serve -- --host 0.0.0.0 --port 8080
+    networks:
+      - zeno
+
+  # Image-embedding HTTP service for the lookup module (make embed, profile `embed`).
+  # GPU when the host has a CDI spec (Makefile picks EMBED_GPU automatically; override with
+  # EMBED_GPU=0/1), layering docker-compose.gpu.yml (CUDA image + GPU via CDI). First start downloads EMBED_MODEL from Hugging Face (minutes) into hf_cache —
+  # hence the long start_period. Host port shifted +100 from Infinity's 7997.
+  embed:
+    image: michaelf34/infinity:0.0.77-cpu
+    profiles: [embed]
+    command: ["v2", "--model-id", "${EMBED_MODEL:-google/siglip-so400m-patch14-384}", "--port", "7997", "--engine", "torch", "--device", "cpu", "--no-trust-remote-code"]
+    # Loopback only: the API has no auth and fetches URLs server-side (SSRF pivot into the zeno network
+    # if exposed to the LAN); containers reach it as embed:7997 regardless.
+    ports:
+      - "127.0.0.1:${EMBED_PORT:-8097}:7997"
+    environment:
+      HF_HOME: /app/.cache
+      DO_NOT_TRACK: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    volumes:
+      - hf_cache:/app/.cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7997/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+    networks:
+      - zeno
 
 volumes:
   service_venv:
+  worker_venv:
+  beat_venv:
+  leads_import_tmp:
+  cms_node_modules:
+  cms_s2_node_modules:
+  hf_cache:
