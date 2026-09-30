@@ -33,7 +33,7 @@ main() {
   PLAN_ID=$(plan_id "$PLAN_SRC")
   TOPIC=$(basename "$(dirname "$PLANS_DIR")")   # handoff is keyed per topic: plan 01 exists in every topic
   HAND=$HANDOFF_DIR/$TOPIC-$PLAN_ID
-  log "picked: plan $PLAN_ID ($(basename "$PLAN_SRC")) dry=$DRY"
+  log "picked: plan $PLAN_ID ($(basename "$PLAN_SRC")) dry=$DRY$([[ $STREAM == 1 ]] || echo " stream=$STREAM")"
   process_plan
 }
 
@@ -62,17 +62,20 @@ plan_unchanged() { [[ $(sha256sum "$PLAN_SRC" | cut -d' ' -f1) == $(cat "$HAND/p
 # leftovers) — a branch switch never carries uncommitted changes. Zeno itself (`.`) is never switched:
 # bash reads the running scripts by offset, so the runner must already be on BRANCH there.
 claim_repos() {
-  local r dir br cur; br=$(plan_header "$PLAN_FILE" BRANCH)
+  local r dir br cur bad; br=$(plan_header "$PLAN_FILE" BRANCH)
   [[ -n $br ]] || { escalate "plan has no BRANCH header"; return 1; }
   while IFS= read -r r; do
     dir=$(repo_dir "$r")
-    [[ -d $dir/.git ]] || { escalate "REPOS entry is not a git repo: $r"; return 1; }
+    [[ -e $dir/.git ]] || { escalate "REPOS entry is not a git repo: $r"; return 1; }
     cur=$(git -C "$dir" branch --show-current)
     if repo_dirty "$dir"; then
       [[ $cur == "$br" && -n $(ls -d "$HAND"/attempt-* 2>/dev/null) ]] || { escalate "dirty tree in $r at claim"; return 1; }
     fi
     [[ $r == . && $cur != "$br" ]] && { escalate "zeno is on '$cur', plan needs '$br' — switch it yourself"; return 1; }
     ensure_branch "$dir" "$br"
+    if [[ ! -f $(base_file "$dir") ]]; then   # first claim only — a resume never merges under a coder's work
+      bad=$(merge_deps "$dir") || { escalate "stream sync: merging plan $bad conflicts in $r — merge by hand"; return 1; }
+    fi
     record_base "$dir"
     install_push_guard "$dir"
   done < <(plan_repos "$PLAN_FILE")

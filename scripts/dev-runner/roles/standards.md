@@ -19,3 +19,5 @@
 9. **No generated artefacts** in commits (`__pycache__`, caches, build, `node_modules`); `uv.lock` IS committed.
 10. **Harness**: `make dev` only (never `make up`); `docker compose logs service` is the truth; BDD gates need a
     fresh `make seed`; restart `worker` after Celery task changes; edit `docker/settings_local.py`, never the clone's.
+11. **CMS (`entirius-pwa-cms`)**: UI rules are the repo's `docs/ui-rules.md`; read it before any UI change. `npm run lint:ui`
+    must add no warning in files you touched.

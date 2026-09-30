@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Coder stub (MOCK_ROLES=1, zero tokens). $1 = role workdir; RUNNER_REPO_DIRS = ':'-separated REPOS dirs.
 # MOCK_CODER_MODE=good|bad · MOCK_STEER_FIXES=1 (steer fixes the code) · MOCK_CODER_SLEEP=N
-# MOCK_CODER_COST=x · MOCK_CODER_STRAY=<path> (write outside REPOS → scope violation) · MOCK_CODER_LEAK=1 · MOCK_CODER_TAMPER=<file> (append to it)
+# MOCK_CODER_NOCOMMIT=1 (touches no repo — planning plans) · MOCK_CODER_COST=x · MOCK_CODER_STRAY=<path> (write outside REPOS → scope violation) · MOCK_CODER_LEAK=1 · MOCK_CODER_TAMPER=<file> (append to it)
 set -euo pipefail
 dir=$1
 sleep "${MOCK_CODER_SLEEP:-0}"
@@ -10,6 +10,7 @@ marker=IMPL_BAD
 [[ -n ${MOCK_STEER:-} && ${MOCK_STEER_FIXES:-0} == 1 ]] && marker=IMPL_OK
 IFS=: read -ra repos <<<"${RUNNER_REPO_DIRS:?}"
 for r in "${repos[@]}"; do
+  [[ ${MOCK_CODER_NOCOMMIT:-0} == 1 ]] && break
   rm -f "$r/IMPL_OK" "$r/IMPL_BAD"
   date +%s%N > "$r/$marker"
   git -C "$r" add -A

@@ -12,7 +12,8 @@ The changes come as one patch per repo (paths in the run context); you may read 
 - Standards (critical = blocks): secret/token/password in the diff · missing MPL header in a repo that uses them ·
   added `requirements.txt`/`setup.py` · push/branch changes. Major: bypassing the toolchain (`pip` instead of
   `uv`, skipped `make check`), missing type hints on new public functions, `typing.List/Optional`, non-English text,
-  generated artefacts committed.
+  generated artefacts committed. CMS (`entirius-pwa-cms`): a diff that adds a `npm run lint:ui` warning in a touched
+  file or breaks a rule of the repo's `docs/ui-rules.md` (R1–R9, icon policy) is major.
 
 ## Output (contract)
 Write `<workdir>/findings.json` (workdir path in the run context), exactly:

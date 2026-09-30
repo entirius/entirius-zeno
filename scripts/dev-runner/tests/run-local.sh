@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Full runner mechanics on mocks — local, zero LLM. Each path ×2:
 # green · red→triage→retry→escalate · steer-ok · triage-escalate · review-critical · crash-resume ·
-# flock · budget · timeout · dry · headerless→wip · e2e-accept guards · ux-tester profile.
+# flock · budget · timeout · dry · headerless→wip · streams · e2e-accept guards · ux-tester profile.
 # Scenarios run with `set +e`: an assertion failure is counted, never aborts the suite.
 set -uo pipefail
 TESTS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -17,7 +17,7 @@ setup() {
   export MOCK_ROLES=1 MAX_ATTEMPTS=2 MAX_REVIEW_ROUNDS=1 SENTINEL_GRACE=1 POLL_STEP=1 ROLE_TIMEOUT=60
   export MOCK_CODER_MODE=good MOCK_REVIEWER_MODE=ok MOCK_TRIAGE_MODE=retry
   export MOCK_CODER_COST=0.01 MOCK_CODER_SLEEP=0 MOCK_STEER_FIXES=0
-  unset MOCK_CODER_STRAY MOCK_CODER_LEAK MOCK_CODER_TAMPER MOCK_CR_JSON MOCK_CR_FAIL MOCK_CR_PROSE
+  unset MOCK_CODER_NOCOMMIT MOCK_CODER_STRAY MOCK_CODER_LEAK MOCK_CODER_TAMPER MOCK_CR_JSON MOCK_CR_FAIL MOCK_CR_PROSE
   mkdir -p "$PLANS_DIR" "$ZENO_ROOT/repo"
   cp "$RUNNER_DIR"/mocks/plans/*.md "$PLANS_DIR/"
   git init -q -b develop "$ZENO_ROOT/repo"
@@ -52,6 +52,19 @@ scenario_green() {
   assert_eq "green: 02 still to-dev before 2nd tick" to-dev "$(status_of 02-b.md)"
   run_runner
   assert_eq "green: 02 → ready after 01 ready" ready "$(status_of 02-b.md)"
+  teardown
+}
+
+scenario_no_commit_ok() { # planning plans (NO_COMMIT_OK) end ready without commits; without the flag they park
+  setup
+  sed -i 's/^TIMEOUT_S: 60$/&\nNO_COMMIT_OK: true/; s#^test -f repo/IMPL_OK$#true#' "$PLANS_DIR/01-a.md"
+  MOCK_CODER_NOCOMMIT=1 run_runner
+  assert_eq "no-commit-ok: 01 → ready without commits" ready "$(status_of 01-a.md)"
+  teardown
+  setup
+  sed -i 's#^test -f repo/IMPL_OK$#true#' "$PLANS_DIR/01-a.md"
+  MOCK_CODER_NOCOMMIT=1 run_runner
+  assert_eq "no-commit-ok: without the flag a commit-less plan parks" parked "$(status_of 01-a.md)"
   teardown
 }
 
@@ -413,6 +426,99 @@ scenario_operator_between_ticks() { # operator edits an unrelated repo between t
   teardown
 }
 
+scenario_gate_negation() { # a gate line `! cmd` fails the gate when cmd succeeds (set -e alone ignores `!`)
+  setup
+  local p=$TMP/neg.md
+  printf 'STATUS: to-dev\n\n```gate\n! grep -q base repo/README.md\ntrue\n```\n' > "$p"
+  assert_true "gate-negation: a matching '! grep' fails the gate" bash -c "! '$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\n! grep -q absent repo/README.md\ntrue\n```\n' > "$p"
+  assert_true "gate-negation: a non-matching '! grep' passes" bash -c "'$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\n! grep -q absent repo/missing-file\ntrue\n```\n' > "$p"
+  assert_true "gate-negation: '! grep' on a missing path fails closed" bash -c "! '$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  teardown
+}
+
+# Streams: plan 01 in stream 1 on the clone repos/pwa/cms, plan 02 in stream 2 on its worktree repos/pwa/cms-s2.
+streams_layout() {
+  mkdir -p "$ZENO_ROOT/repos/pwa"; mv "$ZENO_ROOT/repo" "$ZENO_ROOT/repos/pwa/cms"
+  git -C "$ZENO_ROOT/repos/pwa/cms" worktree add -q -b feature/mock-s2 "$ZENO_ROOT/repos/pwa/cms-s2" develop
+  sed -i 's|^REPOS:.*|REPOS: pwa/cms|; s|^test -f repo/IMPL_OK|test -f repos/pwa/cms/IMPL_OK|' "$PLANS_DIR/01-a.md"
+  sed -i 's|^STATUS: to-dev|&\nSTREAM: 2|; s|^REPOS:.*|REPOS: pwa/cms-s2|; s|^BRANCH:.*|BRANCH: feature/mock-s2|
+    s|^test -f repo/IMPL_OK|test -f repos/pwa/cms-s2/IMPL_OK|' "$PLANS_DIR/02-b.md"
+}
+hooks() { echo "$ZENO_ROOT/repos/pwa/cms/.git/hooks"; }
+
+scenario_streams_pick() { # a loop takes only its own stream's plans — to-dev and stale in-dev alike
+  setup
+  sed -i 's|^STATUS: to-dev|&\nSTREAM: 2|' "$PLANS_DIR/02-b.md"
+  STREAM=2 run_runner
+  assert_eq "streams-pick: stream 2 leaves stream-1 plan 01" to-dev "$(status_of 01-a.md)"
+  sed -i 's/^STATUS: to-dev/STATUS: in-dev/' "$PLANS_DIR/01-a.md"
+  STREAM=2 run_runner
+  assert_true "streams-pick: stream 2 never resumes a stream-1 claim" test ! -d "$STATE_DIR/handoff/mock-01"
+  sed -i 's/^STATUS: in-dev/STATUS: to-dev/' "$PLANS_DIR/01-a.md"
+  run_runner; run_runner
+  assert_eq "streams-pick: stream 1 → 01 ready" ready "$(status_of 01-a.md)"
+  assert_eq "streams-pick: stream 1 skips stream-2 plan 02" to-dev "$(status_of 02-b.md)"
+  STREAM=2 run_runner
+  assert_eq "streams-pick: stream 2 → 02 ready" ready "$(status_of 02-b.md)"
+  teardown
+}
+
+scenario_streams_parallel() { # two loops at once: own locks, no scope clash, push guard held until the last one out
+  setup; streams_layout
+  sed -i 's/^DEPENDS:.*/DEPENDS:/' "$PLANS_DIR/02-b.md"
+  MOCK_CODER_SLEEP=1 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local p1=$!
+  MOCK_CODER_SLEEP=6 STREAM=2 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local p2=$!
+  wait "$p1" 2>/dev/null
+  assert_eq "streams-parallel: 01 ready" ready "$(status_of 01-a.md)"
+  assert_true "streams-parallel: guard kept while stream 2 holds the repo" grep -q 'dev-runner' "$(hooks)/pre-push"
+  wait "$p2" 2>/dev/null
+  assert_eq "streams-parallel: 02 ready" ready "$(status_of 02-b.md)"
+  assert_true "streams-parallel: no lock bounce" bash -c "! grep -q 'another run holds the lock' '$TMP/runner.log'"
+  assert_true "streams-parallel: no scope violation" bash -c "! grep -q 'out-of-scope' '$PLANS_DIR/JOURNAL.md'"
+  assert_true "streams-parallel: guard removed by the last stream" test ! -f "$(hooks)/pre-push"
+  assert_true "streams-parallel: no stream markers left" bash -c "! ls '$(hooks)'/pre-push.runner-s* 2>/dev/null"
+  teardown
+}
+
+scenario_streams_mid_claim_plan() { # a stream-2 plan with a watched repo, added while stream 1 codes: no false scope hit
+  setup
+  mkdir -p "$ZENO_ROOT/repos/docs"; git init -q -b develop "$ZENO_ROOT/repos/docs/site"
+  ( cd "$ZENO_ROOT/repos/docs/site" && echo x > a && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
+  MOCK_CODER_SLEEP=3 "$RUNNER_DIR/runner.sh" --once --plans "$PLANS_DIR" >>"$TMP/runner.log" 2>&1 & local pid=$!
+  sleep 1
+  printf 'STATUS: to-dev\nSTREAM: 2\nDEPENDS:\nREPOS: docs/site\nBRANCH: feature/site\n\n```gate\ntrue\n```\n' > "$PLANS_DIR/03-c.md"
+  wait "$pid" 2>/dev/null
+  assert_eq "mid-claim plan: 01 ready" ready "$(status_of 01-a.md)"
+  assert_true "mid-claim plan: no scope violation" bash -c "! grep -q 'out-of-scope' '$PLANS_DIR/JOURNAL.md' 2>/dev/null"
+  teardown
+}
+
+scenario_streams_sync() { # stream-2 plan depending on a stream-1 plan merges its done commit before coding
+  setup; streams_layout
+  run_runner
+  STREAM=2 run_runner
+  assert_eq "streams-sync: 02 ready" ready "$(status_of 02-b.md)"
+  local d01 b02; d01=$(cat "$STATE_DIR/bases/done-mock-01-cms.sha"); b02=$(cat "$STATE_DIR/bases/mock-02-cms-s2.sha")
+  assert_true "streams-sync: 01 merged into feature/mock-s2" git -C "$ZENO_ROOT/repos/pwa/cms-s2" merge-base --is-ancestor "$d01" feature/mock-s2
+  assert_true "streams-sync: review window starts after the merge" git -C "$ZENO_ROOT/repos/pwa/cms-s2" merge-base --is-ancestor "$d01" "$b02"
+  assert_true "streams-sync: merge logged" grep -q 'stream sync: merged plan 01' "$TMP/runner.log"
+  teardown
+}
+
+scenario_streams_sync_conflict() { # a conflicting dependency merge parks the plan with a clean tree
+  setup; streams_layout
+  run_runner
+  ( cd "$ZENO_ROOT/repos/pwa/cms-s2" && echo other > IMPL_OK && git add -A && git -c user.name=t -c user.email=t@t commit -qm "feat: other" )
+  STREAM=2 run_runner
+  assert_eq "streams-conflict: 02 parked" parked "$(status_of 02-b.md)"
+  assert_true "streams-conflict: reason journaled" grep -q 'stream sync: merging plan 01 conflicts' "$PLANS_DIR/JOURNAL.md"
+  assert_eq "streams-conflict: tree clean" "" "$(git -C "$ZENO_ROOT/repos/pwa/cms-s2" status --porcelain)"
+  assert_true "streams-conflict: guard removed" test ! -f "$(hooks)/pre-push"
+  teardown
+}
+
 # make e2e-accept on stubs (claude, curl, make): guards before any session, minimal role env, scope check after it.
 accept_stubs() { # bin-dir — the claude stub writes the report and touches the sentinel named in its prompt
   mkdir -p "$1" "$TMP/profiles/ux-tester"; echo '{}' > "$TMP/profiles/ux-tester/settings.json"
@@ -504,5 +610,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks accept_guards ux_profile)
+SCENARIOS=(green no_commit_ok red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks gate_negation streams_pick streams_parallel streams_mid_claim_plan streams_sync streams_sync_conflict accept_guards ux_profile)
 main "$@"
