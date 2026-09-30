@@ -64,6 +64,41 @@ services:
       # image's `npm ci`, so a changed package.json needs the volume dropped:
       # docker volume rm ${COMPOSE_PROJECT_NAME:-entirius-zeno}_cms_node_modules
       - cms_node_modules:/entirius/pwa/entirius-pwa-cms/node_modules
+    # The volume is seeded from the image's GitHub checkout; a clone with new dependencies re-installs once:
+    # `npm ci` runs when package-lock.json no longer matches the stamp written after the last install.
+    command:
+      - sh
+      - -c
+      - >-
+        h=$$(sha256sum package-lock.json | cut -c1-64);
+        [ "$$(cat node_modules/.zeno-lock 2>/dev/null)" = "$$h" ] || { npm ci --no-audit --no-fund && echo "$$h" > node_modules/.zeno-lock; };
+        exec npm run serve -- --host 0.0.0.0 --port 8080
+
+  # make cms-dev-s2 — a second CMS dev server for dev-runner stream 2: the git worktree
+  # repos/pwa/entirius-pwa-cms-s2 on :8181, same image, API and install stamp as `cms`
+  # (scripts/dev-runner/README.md, Streams).
+  cms-s2:
+    image: ${COMPOSE_PROJECT_NAME:-entirius-zeno}-cms
+    profiles: [cms-s2]
+    ports:
+      - "${CMS_S2_PORT:-8181}:8080"
+    environment:
+      VUE_APP_API_URL: http://localhost:${SERVICE_PORT:-8100}
+      VUE_APP_CHANNEL: ${PWA_CHANNEL:-default-europe}
+      VUE_APP_PANELS: pages,pim,points
+      VUE_APP_LANG: EN
+    volumes:
+      - ${PWA_PATH:-./repos/pwa}/entirius-pwa-cms-s2:/entirius/pwa/entirius-pwa-cms
+      - cms_s2_node_modules:/entirius/pwa/entirius-pwa-cms/node_modules
+    command:
+      - sh
+      - -c
+      - >-
+        h=$$(sha256sum package-lock.json | cut -c1-64);
+        [ "$$(cat node_modules/.zeno-lock 2>/dev/null)" = "$$h" ] || { npm ci --no-audit --no-fund && echo "$$h" > node_modules/.zeno-lock; };
+        exec npm run serve -- --host 0.0.0.0 --port 8080
+    networks:
+      - zeno
 
   # Image-embedding HTTP service for the lookup module (make embed, profile `embed`).
   # GPU when the host has a CDI spec (Makefile picks EMBED_GPU automatically; override with
@@ -98,4 +133,5 @@ volumes:
   beat_venv:
   leads_import_tmp:
   cms_node_modules:
+  cms_s2_node_modules:
   hf_cache:

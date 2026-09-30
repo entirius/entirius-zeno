@@ -1,4 +1,4 @@
-.PHONY: setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -9,7 +9,7 @@ COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROFILES = --profile infra --profile service
 # pwa/cms are opt-in (started by their own targets), but teardown and introspection
 # must always see the whole stack — otherwise frontends outlive `down`/`clean`.
-ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile docs --profile www --profile embed
+ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile cms-s2 --profile docs --profile www --profile embed
 # Embedding service: EMBED_GPU=1 layers the CUDA + GPU (CDI) override on the dev compose.
 # Auto-detected from the CDI spec; .env or the command line override it.
 EMBED_GPU ?= $(shell test -f /etc/cdi/nvidia.yaml && echo 1 || echo 0)
@@ -211,6 +211,13 @@ cms-dev:  ## Start the admin CMS from repos/pwa/entirius-pwa-cms (hot reload)
 		  echo "  git clone git@github.com:entirius/entirius-pwa-cms.git repos/pwa/entirius-pwa-cms"; exit 1; }
 	@$(MAKE) --no-print-directory cms COMPOSE="$(COMPOSE_DEV)"
 
+cms-dev-s2:  ## Second CMS dev server on :8181 from the worktree repos/pwa/entirius-pwa-cms-s2 (dev-runner stream 2)
+	@test -e repos/pwa/entirius-pwa-cms-s2/.git || \
+		{ echo "ERROR: no worktree — run:"; \
+		  echo "  git -C repos/pwa/entirius-pwa-cms worktree add -b <branch>-s2 ../entirius-pwa-cms-s2 <branch>"; exit 1; }
+	@$(COMPOSE_DEV) $(PROFILES) --profile cms-s2 up -d cms-s2
+	@$(MAKE) --no-print-directory urls
+
 frontends: pwa cms  ## Start both frontends
 
 clone-docs:  ## Clone the documentation portal (private GitLab) into repos/docs/
@@ -278,7 +285,7 @@ runner-test:  ## Runner mock suite (zero tokens)
 runner-init:  ## Create role profiles ~/.claude-runner/{coder,reviewer,triage,ux-tester} (idempotent)
 	@scripts/dev-runner/init.sh
 
-runner-loop:  ## Tick every 5 min until scripts/dev-runner/STOP exists (sleep inhibited)
+runner-loop:  ## Tick every minute until scripts/dev-runner/STOP exists (sleep inhibited; STREAM=2 for a second loop)
 	@scripts/dev-runner/loop.sh $(PLANS)
 
 runner-status:  ## Plans table, journal tail, today's spend
