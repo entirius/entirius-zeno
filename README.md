@@ -70,6 +70,17 @@ Host ports are shifted +100 from the standard ones (postgres 5532, redis 6479,
 rabbitmq 5772, service 8100) — developers usually run local instances on the
 standard ports. Override in `.env` if needed.
 
+## Platform 3.0.0
+
+| Component | Version | Source |
+|---|---|---|
+| `entirius-service-volkanos` | **3.0.0** | github `entirius/entirius-service-volkanos`, tag `v3.0.0` |
+| `entirius-pwa-cms` | **3.1.0** | github `entirius/entirius-pwa-cms`, tag `v3.1.0` |
+| platform modules | `pim 3.3.0 · pim-csv 4.1.0 · pricemanager 4.2.1 · lookup 0.3.0 · utils 2.2.0 · munin 2.2.0 · leads 0.3.0 · …` | PyPI |
+
+The manifest of record is **`entirius-service-volkanos/uv.lock`** at the service tag. The harness itself
+follows `SERVICE_BRANCH` (default `develop`); set `SERVICE_BRANCH=v3.0.0` to run exactly this release.
+
 ## Service configuration
 
 Entirius services require a per-environment `main/settings_local.py` and refuse
