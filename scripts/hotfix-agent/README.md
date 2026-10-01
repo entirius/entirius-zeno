@@ -8,7 +8,7 @@ Redmine issue (New / To Do, unassigned or ours)
   → take: note + status In Progress, fetch issue + attachments to todo/hotfix/issues/<id>/
   → plan todo/hotfix/dev-plans/<id>-hotfix.md (from plan.template.md)
   → dev-runner (coder → gate → reviewer) on branch hotfix/<id> in repos/pwa/entirius-pwa-cms-hotfix (from origin/master)
-  → ready  → release.sh: next 3.0.x, CHANGELOG, gitleaks, PR → master, green checks, merge, tag, GitHub release,
+  → ready  → release.sh: next patch of the newest release, CHANGELOG, gitleaks, PR → master, green checks, merge, tag, GitHub release,
              PR → develop, Redmine note + To Deploy + assigned to the reporter, notify-send
   → parked → outcome needs-info / not-cms / cannot-reproduce: the coder's Polish note to the reporter (To Do, assigned
              to the reporter); anything else: handed to the operator (To Do, assigned to us)
@@ -25,7 +25,7 @@ Redmine issue (New / To Do, unassigned or ours)
 
 - One issue at a time; max **3 releases a day** (`MAX_RELEASES_PER_DAY`), **$25 per issue** (plan `BUDGET_USD`),
   $75 a day for the agent's runner (`runner.env`, own state in `.runner/hotfix`, separate from the main runner).
-- Patch versions of the current line only (`v3.0.x`); a failing-first test and every PR check green before a merge.
+- Patch versions of the newest release only (after `v3.1.0` the next is `3.1.1`); a failing-first test and every PR check green before a merge.
 - The coder never pushes; `release.sh` pushes over SSH (the gh token has no `workflow` scope) to
   `entirius/entirius-pwa-cms` only. Never GitLab cms-blueprint (a tag there deploys production).
 - An issue is taken again only after someone else changes it (the stored copy is refreshed after each of our notes).

@@ -28,7 +28,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make www WWW_BRANCH=x` | marketing site entirius.com (:3200, Next.js hot reload) from `repos/www/entirius-react-www-<branch>` — private GitLab clone |
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
-| `make hotfix-agent` / `hotfix-status` / `hotfix-stop` | CMS hotfix agent: takes cms-blueprint issues from the internal Redmine (New/To Do, unassigned or ours), fixes them through the dev-runner on a `hotfix/<issue>` worktree (`repos/pwa/entirius-pwa-cms-hotfix`, from `origin/master`) and releases the next 3.0.x on GitHub; max 3 releases/day, $25/issue; runbook `scripts/hotfix-agent/README.md` |
+| `make hotfix-agent` / `hotfix-status` / `hotfix-stop` | CMS hotfix agent: takes cms-blueprint issues from the internal Redmine (New/To Do, unassigned or ours), fixes them through the dev-runner on a `hotfix/<issue>` worktree (`repos/pwa/entirius-pwa-cms-hotfix`, from `origin/master`) and releases the next patch version on GitHub; max 3 releases/day, $25/issue; runbook `scripts/hotfix-agent/README.md` |
 | `make check` | guard: canonical `.gitleaks.toml` symlink present |
 | `make clean` | remove containers and volumes |
 

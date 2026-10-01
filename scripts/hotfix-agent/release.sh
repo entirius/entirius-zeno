@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release.sh <plan-id> <issue-id> — release a `ready` hotfix plan as the next CMS patch version.
+# release.sh <plan-id> <issue-id> — release a `ready` hotfix plan as the next CMS patch version (of the newest release).
 # Deterministic, no model: version bump + CHANGELOG, gitleaks, push the hotfix branch (SSH), PR → master, green checks,
 # merge, tag, GitHub release, PR → develop, Redmine note (To Deploy, assigned to the reporter). Stops at the first failure.
 set -euo pipefail
@@ -35,9 +35,10 @@ cd "$W"
 git fetch -q origin --tags
 git merge-base --is-ancestor origin/master HEAD || { log "origin/master moved past the branch base — rebase by hand"; exit 1; }
 
-last=$(git tag -l 'v3.0.*' --sort=-v:refname | head -1)
-[[ $last =~ ^v3\.0\.([0-9]+)$ ]] || { log "no v3.0.x tag found"; exit 1; }
-VERSION=3.0.$((BASH_REMATCH[1] + 1))
+# The next patch of the newest final release (rc tags left out): 3.1.1 after 3.1.0 — never a patch of an older line.
+last=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+[[ $last =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || { log "no release tag found"; exit 1; }
+VERSION=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))
 log "issue #$ISSUE → $VERSION"
 
 npm version "$VERSION" --no-git-tag-version >/dev/null
