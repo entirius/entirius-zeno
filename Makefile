@@ -1,4 +1,4 @@
-.PHONY: cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
 .DEFAULT_GOAL := help
 
 -include .env
@@ -293,6 +293,22 @@ runner-status:  ## Plans table, journal tail, today's spend
 
 runner-stop:  ## Stop the runner after the current tick
 	@touch scripts/dev-runner/STOP && echo "STOP set — remove scripts/dev-runner/STOP to resume"
+
+hotfix-agent:  ## CMS hotfix agent loop: Redmine cms-blueprint issues → fix → patch release (scripts/hotfix-agent)
+	@mkdir -p .runner/hotfix && rm -f .runner/hotfix/STOP
+	@setsid nohup scripts/hotfix-agent/agent.sh >> .runner/hotfix/loop.log 2>&1 < /dev/null & echo "hotfix agent started — make hotfix-status"
+
+hotfix-once:  ## One hotfix-agent tick in the foreground
+	@scripts/hotfix-agent/agent.sh --once
+
+hotfix-status:  ## Hotfix agent: plans, releases, last log lines
+	@pgrep -f "scripts/hotfix-agent/agent.sh" >/dev/null && echo "agent: running" || echo "agent: stopped"
+	@cat todo/hotfix/dev-plans/00-README.md 2>/dev/null | tail -n +5
+	@echo "== releases"; tail -5 .runner/hotfix/releases.log 2>/dev/null || true
+	@echo "== log"; tail -8 .runner/hotfix/agent.log 2>/dev/null || true
+
+hotfix-stop:  ## Stop the hotfix agent after the current tick
+	@mkdir -p .runner/hotfix && touch .runner/hotfix/STOP && echo "STOP set — make hotfix-agent to start again"
 
 check:  ## Verify the canonical .gitleaks.toml is linked here and in every mounted clone
 	@sh scripts/check-gitleaks-links.sh
