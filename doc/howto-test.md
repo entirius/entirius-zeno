@@ -25,6 +25,10 @@ Then look around:
 | Products API | http://localhost:8100/api/matrix/v2/default-europe/products/?page_size=100 |
 | A cart with a discount | POST `/api/checkout/1/default-europe/carts/` with header `X-API-KEY: entirius-docker-checkout-dev-key-2026` |
 
+Customer endpoints (`/api/accounts/v1/default-europe/customer/me/`, profile, addresses, wishlist, the
+customer side of checkout) need `django_accounts.backends.JWTAccessBackend` in `AUTHENTICATION_BACKENDS`;
+`docker/settings_local.py` sets it. A 401 with a valid token from `customer/tokens/` means it is missing.
+
 The seed prints step timers (`[65s] Step 2: Load Fixtures`) and ends with `SEED OK in Ns` —
 if it dies it names the failed step (`SEED FAILED (exit N) during: ...`).
 
