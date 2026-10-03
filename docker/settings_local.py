@@ -16,6 +16,9 @@ ENVIRONMENT = "development"
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-zeno-dev-only")
 DEBUG = config("DEBUG", default=True, cast=bool)
+# The OpenAPI schema and its UIs stay public here: the stack probes (stack-reload.sh, scripts/setup.py, smoke.sh, the
+# Makefile) read them. The service serves them to staff only unless this is set (access delivery, plan 10b).
+API_SCHEMA_PUBLIC = True
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", cast=Csv())
 
 # Compose passes DATABASE_URL pointing at the db container — no default, fail-closed.
