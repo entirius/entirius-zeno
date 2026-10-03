@@ -81,6 +81,8 @@ services:
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Access gate mode (docker/settings_local.py): enforce | observe | off.
+      ACCESS_GATE_MODE: ${ACCESS_GATE_MODE:-enforce}
       # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
       OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
       OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
@@ -262,6 +264,8 @@ services:
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Access gate mode (docker/settings_local.py): enforce | observe | off.
+      ACCESS_GATE_MODE: ${ACCESS_GATE_MODE:-enforce}
       # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
       OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
       OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}
@@ -309,6 +313,8 @@ services:
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
+      # Access gate mode (docker/settings_local.py): enforce | observe | off.
+      ACCESS_GATE_MODE: ${ACCESS_GATE_MODE:-enforce}
       # Outreach SMTP of channel default-europe (docker/settings_local.py); defaults = GreenMail.
       OUTREACH_SMTP_HOST: ${OUTREACH_SMTP_HOST:-greenmail}
       OUTREACH_SMTP_PORT: ${OUTREACH_SMTP_PORT:-3025}

@@ -239,5 +239,8 @@ AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 if "django_accounts" in LOCAL_APPS:
     AUTHENTICATION_BACKENDS.insert(0, "django_accounts.backends.JWTAccessBackend")
 
+# Access gate (django_access): enforce | observe | off; compose passes ACCESS_GATE_MODE from .env.
+ACCESS_GATE_MODE = config("ACCESS_GATE_MODE", default="enforce")
+
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
