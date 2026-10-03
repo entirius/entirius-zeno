@@ -53,12 +53,13 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed, `make mail`, toolbox up) | 696 passed / 0 failed / 15 skipped (module clones with the FIX-16 retries; re-measured 2026-09-30 at the CMS redesign release close) | ~2-5 min |
+| `make bdd` (fresh seed, `make mail`, toolbox up) | 1228 passed / 0 failed / 15 skipped, gate in `enforce` (access release close, measured 2026-10-03; was 696 before `@access`) | ~3.5 min |
+| `make bdd TAGS=@access` (seed with the access users, after the full run) | 509 passed (`TAGS=@access-security` alone: 488); re-runnable, not one-shot (measured 2026-10-03) | ~1 min |
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
-| `make e2e` (frontends up) | 12 passed (measured 2026-09-30, CMS redesign release close) | ~10 s |
-| `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-09-30) | ~30 s |
+| `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
+| `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
 | `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-08-25 over three fresh seeds — every metric above, the image leg included, came back identical on all three) | ~1 min |
 
@@ -127,6 +128,18 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   vectors left the search resolving ties by traversal order, so the image leg looked random. With
   real vectors it is deterministic — three fresh seeds returned the same number.
   `manage.py lookup_doctor` is the handshake that catches it.
+- The access gate (`django_access`) is on in `enforce`; the mode comes from `.env` `ACCESS_GATE_MODE` (`enforce` |
+  `observe` | `off`) through compose — a changed value needs `make dev` (a restart keeps the old env). Staff see it
+  as `gate_mode` in `GET api/access/v2/me/`.
+- Seed creates the staff role users `viewer`, `editor`, `manager`, `accessadmin` (Administrator) and `norole` (staff,
+  no role), password `<username>123` (dev defaults), and imports the legacy fixture API keys as access tokens
+  (`access_import_legacy_keys --report`, then `--check`). `norole` is role-less only on a seeded DB — migration 0002
+  grants Manager to staff that exist at migrate time.
+- `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
+- `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
+  service default is staff-only. `DRF_NUM_PROXIES` stays unset (no proxy; `DEBUG=True` keeps `volkanos.W001` silent).
+- Ten wrong passwords for one user on `api/token/` block that user from that address for 15 minutes — a probe
+  with a stale password locks `admin` out of the CMS and BDD too.
 - `make embed` GPU variant needs the GPU visible to Docker via CDI (`/etc/cdi/nvidia.yaml`,
   generated with `nvidia-ctk cdi generate`; regenerate after a driver update). Without the spec `make embed`
   falls back to CPU. First start downloads `EMBED_MODEL` (minutes) into the `hf_cache` volume — `make clean`
