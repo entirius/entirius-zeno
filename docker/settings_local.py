@@ -231,5 +231,13 @@ LOCAL_APPS = [
     "django_omnibus",
 ]
 
+# Guard until the service release registers it itself: django_accounts customer views (@authenticate) call
+# django.contrib.auth.authenticate(request), which only tries these backends. Without JWTAccessBackend the
+# customer Bearer token is never read and customer/me, profile, addresses, wishlist, checkout are all 401.
+# ModelBackend stays for the admin login.
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
+if "django_accounts" in LOCAL_APPS:
+    AUTHENTICATION_BACKENDS.insert(0, "django_accounts.backends.JWTAccessBackend")
+
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
