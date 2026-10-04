@@ -8,7 +8,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 
 | Command | Meaning |
 |---|---|
-| `make setup` | one command to a seeded stack: clones (`REFS=release\|develop`), dev, mail, CMS, toolbox check (missing toolbox = DEGRADED, not fatal), seed (`EMBED=1`, `SEED=0`) |
+| `make setup` | one command to a seeded stack: clones (`REFS=release\|develop`), dev, mail, CMS, toolbox check (missing toolbox = DEGRADED, not fatal), seed (`EMBED=1`, `SEED=0`); a feature world: `REFS="feature/x feature/y"` puts every clean clone (service and docs too) on the first listed branch it has, else develop, and starts the docs portal; `SETUP_DRY=1` only prints where each clone would land |
 | `make init` / `clone` | bootstrap `.env` + local clone of the service under test |
 | `make clone-repos` | clone all entirius repos into `repos/` groups, modules at uv.lock versions |
 | `make build` / `up` / `down` | build image, start/stop the stack (service, worker, beat) |

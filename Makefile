@@ -30,7 +30,7 @@ init:  ## Create .env from template + repos/ layout
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa repos/docs repos/www
 
-setup:  ## One command to a seeded stack: clones, dev stack, mail, CMS, toolbox check, seed (REFS=release|develop EMBED=1 SEED=0)
+setup:  ## One command to a seeded stack: clones, dev stack, mail, CMS, toolbox check, seed (REFS=release|develop|"<branch …>" EMBED=1 SEED=0 SETUP_DRY=1)
 	@python3 scripts/setup.py
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)

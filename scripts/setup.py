@@ -6,6 +6,9 @@
 
     make setup                      # release refs: modules at the service uv.lock tags
     make setup REFS=develop         # integration: every clean clone on develop
+    make setup REFS="feature/x feature/y"   # a feature world: each clean clone (service and docs included) on the
+                                    # first listed branch it has (local or origin), else develop; + the docs portal
+    SETUP_DRY=1 make setup REFS=…   # print which ref every clone would land on; change nothing
     make setup EMBED=1              # also start the embedding service (lookup)
     make setup SEED=0               # stop before seeding
     SERVICE_BRANCH=<branch> python3 scripts/setup.py   # service branch other than .env for one run
@@ -24,6 +27,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CLONE_GROUPS = ("repos/py", "repos/django", "repos/tests", "repos/pwa")
+# A feature world also moves the service under test and the docs portal clone.
+WORLD_GROUPS = (*CLONE_GROUPS, "repos/services", "repos/docs")
 
 
 def step(title):
@@ -78,8 +83,10 @@ def clones(refs):
             "SERVICE_BRANCH", "develop"
         )
         run("make", "refresh-repos", f"SERVICE_BRANCH={branch}")
-    else:
+    elif refs == "develop":
         switch_to_develop()
+    else:
+        switch_to_world(refs.split())
 
 
 def switch_to_develop():
@@ -107,6 +114,54 @@ def switch_to_develop():
             )
 
 
+def world_ref(repo, branches):
+    """The first listed branch the clone has (local first, then origin), else develop; None when neither exists."""
+    for branch in branches:
+        if not git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}").returncode:
+            return branch, "local"
+        if not git(repo, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}").returncode:
+            return branch, "origin"
+    if not git(repo, "rev-parse", "--verify", "--quiet", "origin/develop").returncode:
+        return "develop", "origin"
+    return None, None
+
+
+def switch_to_world(branches, dry=False):
+    """Every clean clone onto the first branch of `branches` it has, else develop — dirty clones are never touched."""
+    rows = []
+    for group in WORLD_GROUPS:
+        for repo in sorted((ROOT / group).glob("*/.git")):
+            repo = repo.parent
+            name = str(repo.relative_to(ROOT))
+            if (repo / ".git").is_file():  # a linked worktree (hotfix agent, stream 2): it owns its branch, never moved
+                rows.append((name, git(repo, "branch", "--show-current").stdout.strip() or "detached", "skip: worktree"))
+                continue
+            if git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
+                rows.append((name, git(repo, "branch", "--show-current").stdout.strip() or "detached", "skip: dirty"))
+                continue
+            git(repo, "fetch", "--quiet", "origin")
+            branch, where = world_ref(repo, branches)
+            if branch is None:
+                rows.append((name, "-", "skip: no listed branch and no develop"))
+                continue
+            note = "" if branch in branches else "fallback"
+            if not dry:
+                if where == "local" or branch == "develop":
+                    git(repo, "switch", "--quiet", branch)
+                else:
+                    git(repo, "switch", "--quiet", "--track", "-c", branch, f"origin/{branch}")
+                if where == "origin":
+                    git(repo, "merge", "--ff-only", "--quiet", f"origin/{branch}")
+                if (git(repo, "branch", "--show-current").stdout.strip() or "detached") != branch:
+                    note = "SWITCH FAILED"
+            rows.append((name, branch, note))
+    width = max(len(row[0]) for row in rows) if rows else 0
+    for name, branch, note in rows:
+        print(f"  {name:<{width}}  {branch}{('  (' + note + ')') if note else ''}")
+    on_branch = sum(1 for _, branch, _ in rows if branch in branches)
+    print(f"  {on_branch} clone(s) on {' / '.join(branches)}, the rest on develop or skipped")
+
+
 def wait_http(url, seconds):
     for _ in range(seconds // 5):
         try:
@@ -119,7 +174,7 @@ def wait_http(url, seconds):
     return False
 
 
-def stack(embed):
+def stack(embed, docs=False):
     step("3/7 stack (dev mode, mail sandbox, CMS)")
     run("make", "dev")
     port = env_value("SERVICE_PORT", "8100")
@@ -131,6 +186,8 @@ def stack(embed):
     run("make", "cms-dev")
     if embed:
         run("make", "embed")
+    if docs:
+        run("make", "docs")
 
 
 def toolbox():
@@ -167,12 +224,17 @@ def summary(mode, seeded):
 
 
 def main():
-    refs = os.environ.get("REFS", "release")
-    if refs not in ("release", "develop"):
-        sys.exit("setup: REFS must be release or develop")
+    refs = os.environ.get("REFS", "release").strip() or "release"
+    world = refs not in ("release", "develop")
+    if os.environ.get("SETUP_DRY") == "1":
+        if not world:
+            sys.exit("setup: SETUP_DRY needs a feature world (REFS=<branch …>)")
+        step(f"dry run: where each clone would land ({refs})")
+        switch_to_world(refs.split(), dry=True)
+        return
     preflight()
     clones(refs)
-    stack(os.environ.get("EMBED") == "1")
+    stack(os.environ.get("EMBED") == "1", docs=world and (ROOT / "repos/docs/entirius-docs/.git").exists())
     mode = toolbox()
     seeded = os.environ.get("SEED", "1") != "0"
     if seeded:
