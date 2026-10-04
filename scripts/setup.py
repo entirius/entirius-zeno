@@ -188,6 +188,8 @@ def stack(embed, docs=False):
         run("make", "embed")
     if docs:
         run("make", "docs")
+        # A running Astro dev server does not survive a branch switch of its clone ("collection does not exist").
+        run("docker", "compose", "--profile", "docs", "restart", "docs")
 
 
 def toolbox():
