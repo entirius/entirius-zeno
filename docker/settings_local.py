@@ -228,5 +228,9 @@ LOCAL_APPS = [
     "django_omnibus",
 ]
 
+# django_accounts signup (EMAIL_DOUBLE_OPTIN) builds the confirmation link from this; unset, every signup is a 500.
+# The storefront (:3100) receives it at /user-handler?key=&uid= and activates the account.
+NEW_ACCOUNT_REDIRECT_URL = config("NEW_ACCOUNT_REDIRECT_URL", default="http://localhost:3100/user-handler")
+
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
