@@ -53,8 +53,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed, `make mail`, toolbox up) | 1228 passed / 0 failed / 15 skipped, gate in `enforce` (access release close, measured 2026-10-03; was 696 before `@access`) | ~3.5 min |
-| `make bdd TAGS=@access` (seed with the access users, after the full run) | 509 passed (`TAGS=@access-security` alone: 488); re-runnable, not one-shot (measured 2026-10-03) | ~1 min |
+| `make bdd` (fresh seed, `make mail`, toolbox up) | 1249 passed / 0 failed / 15 skipped, gate in `enforce` (after the access pre-review fixes, measured 2026-10-05; was 696 before `@access`) | ~3.5 min |
+| `make bdd TAGS=@access` (seed with the access users, after the full run) | 530 passed (`TAGS=@access-security` alone: 504); re-runnable, not one-shot (measured 2026-10-05) | ~1 min |
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
