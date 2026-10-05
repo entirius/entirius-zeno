@@ -15,6 +15,20 @@ else
   # starts with `! ` becomes an explicit check (set -x still traces the command and prints what matched). Exit 1 = no
   # match = pass; 0 = matched and ≥ 2 = the check itself failed (a missing path) — both fail the gate.
   block=$(sed -E 's/^! (.+)$/rc=0; \1 || rc=$?; [ "$rc" -eq 1 ] || { echo "gate: must-not-match check rc=$rc (0 = matched, >1 = error)" >\&2; exit 1; }/' <<<"$block")
+  # Every statement is its own check: set -e ignores a failure left of `&&` (`test -f a && grep -q x a` passes when a is
+  # missing), but the statement's status is still non-zero — so a `[ $? = 0 ]` check follows each one. Lines are grouped
+  # until the group parses cleanly (a multi-line `node -e '…'`, a loop, a heredoc or a `\` continuation stays one
+  # statement). An `|| exit` wrapper would not do: bash turns set -e off inside it. An unparseable tail stays as written.
+  strict="" buf=""
+  while IFS= read -r line || [[ -n $line ]]; do
+    buf+="$line"$'\n'
+    [[ $line =~ (^|[^\\])(\\\\)*\\$ ]] && continue
+    out=$(bash -n -c "$buf" 2>&1) && [[ -z $out ]] || continue
+    strict+=$buf
+    grep -qvE '^[[:space:]]*(#.*)?$' <<<"$buf" && strict+=$'[ $? = 0 ] || { echo "gate: the statement above failed" >&2; exit 1; }\n'
+    buf=""
+  done <<<"$block"
+  block=$strict$buf
   printf '#!/usr/bin/env bash\nset -euo pipefail\nset -x\n%s\n' "$block" > "$script"
 fi
 # set -x traces expanded values into gate.log (triage input, archived) — drop secret-bearing env first;
