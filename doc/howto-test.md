@@ -25,6 +25,10 @@ Then look around:
 | Products API | http://localhost:8100/api/matrix/v2/default-europe/products/?page_size=100 |
 | A cart with a discount | POST `/api/checkout/1/default-europe/carts/` with header `X-API-KEY: entirius-docker-checkout-dev-key-2026` |
 
+Customer signup (`POST /api/accounts/v1/default-europe/customer/signup/`) mails a confirmation link built from
+`NEW_ACCOUNT_REDIRECT_URL` (`docker/settings_local.py`, default the storefront's `/user-handler`); the mail lands in
+GreenMail (`make mail`). A 500 on signup means the setting is missing.
+
 The seed prints step timers (`[65s] Step 2: Load Fixtures`) and ends with `SEED OK in Ns` —
 if it dies it names the failed step (`SEED FAILED (exit N) during: ...`).
 
