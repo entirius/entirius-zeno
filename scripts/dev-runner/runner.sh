@@ -30,6 +30,7 @@ main() {
   daily_cap_ok || exit 0
   acquire_lock || { log "another run holds the lock — exiting (OK)"; exit 0; }
   PLAN_SRC=$(pick_plan) || { log "no actionable plan — sleeping"; exit 0; }
+  preflight_ok || { log "preflight red — not claiming this tick (PREFLIGHT_CMD)"; exit 0; }
   PLAN_ID=$(plan_id "$PLAN_SRC")
   TOPIC=$(basename "$(dirname "$PLANS_DIR")")   # handoff is keyed per topic: plan 01 exists in every topic
   HAND=$HANDOFF_DIR/$TOPIC-$PLAN_ID
@@ -51,6 +52,11 @@ process_plan() {
   claim_repos || return 0
   trap release_repos EXIT INT TERM
   local cap; cap=$(plan_header "$PLAN_FILE" BUDGET_USD); PLAN_CAP_USD=${cap:-$CODER_CAP_USD}
+  # A checkpoint reviews a whole phase in diff chunks: below the floor it parks on review cost alone (access 09, 16).
+  if [[ $(plan_header "$PLAN_FILE" KIND) == checkpoint ]] &&
+    awk -v c="$PLAN_CAP_USD" -v f="$CHECKPOINT_MIN_CAP_USD" 'BEGIN { exit !(c < f) }'; then
+    PLAN_CAP_USD=$CHECKPOINT_MIN_CAP_USD
+  fi
   local tmo; tmo=$(plan_header "$PLAN_FILE" TIMEOUT_S); [[ -n $tmo ]] && ROLE_TIMEOUT=$tmo
   if [[ $(plan_header "$PLAN_FILE" KIND) == checkpoint ]]; then run_checkpoint; else attempt_loop; fi
 }
@@ -234,6 +240,7 @@ escalate() {
   mutate plan_set_status "$PLAN_SRC" parked
   journal "$PLAN_ID | PARKED | $reason${memo:+ · memo: $memo}"
   log "ESCALATION: $reason"
+  notify "dev-runner: plan $PLAN_ID parked" "$reason"
 }
 
 main "$@"

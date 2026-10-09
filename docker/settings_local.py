@@ -16,6 +16,11 @@ ENVIRONMENT = "development"
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-zeno-dev-only")
 DEBUG = config("DEBUG", default=True, cast=bool)
+# The OpenAPI schema and its UIs stay public here: the stack probes (stack-reload.sh, scripts/setup.py, smoke.sh, the
+# Makefile) read them. The service serves them to staff only unless this is set (access delivery, plan 10b).
+API_SCHEMA_PUBLIC = True
+# No proxy in front of the service: per-IP throttles key on REMOTE_ADDR. Unset fails check --deploy (volkanos.E001).
+DRF_NUM_PROXIES = 0
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", cast=Csv())
 
 # Compose passes DATABASE_URL pointing at the db container — no default, fail-closed.
@@ -235,6 +240,9 @@ LOCAL_APPS = [
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 if "django_accounts" in LOCAL_APPS:
     AUTHENTICATION_BACKENDS.insert(0, "django_accounts.backends.JWTAccessBackend")
+
+# Access gate (django_access): enforce | observe | off; compose passes ACCESS_GATE_MODE from .env.
+ACCESS_GATE_MODE = config("ACCESS_GATE_MODE", default="enforce")
 
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
