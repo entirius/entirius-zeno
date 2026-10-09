@@ -261,13 +261,13 @@ mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and wait until it is
 toolbox-check:  ## Verify the AI toolbox answers for AI_TOOLBOX_CHANNEL and exposes only fake models
 	@sh scripts/toolbox-check.sh
 
-# The funnel test file itself ships with plan 13; phone first, then desktop.
+# The funnel test file ships with the test package; phone first, then desktop.
 e2e-funnel:  ## Run the leads funnel e2e twice: iPhone 14 emulation, then desktop
 	@$(MAKE) --no-print-directory e2e E2E_ARGS=e2e/cms/test_leads_funnel.py E2E_DEVICE="iPhone 14"
 	@$(MAKE) --no-print-directory e2e E2E_ARGS=e2e/cms/test_leads_funnel.py E2E_DEVICE=
 
-e2e-accept:  ## AI-tester acceptance run of the funnel (ux-tester role, plan 13)
-	@test -f $$HOME/.claude-runner/ux-tester/settings.json || { echo "ux-tester role not registered (plan 13)"; exit 1; }
+e2e-accept:  ## AI-tester acceptance run of the funnel (ux-tester role)
+	@test -f $$HOME/.claude-runner/ux-tester/settings.json || { echo "ux-tester role not registered (make runner-init)"; exit 1; }
 	@bash scripts/dev-runner/accept.sh
 
 # --- dev-runner (scripts/dev-runner): executes todo/<topic>/dev-plans one plan per tick ---
