@@ -241,8 +241,8 @@ services:
     networks:
       - zeno
 
-  # Celery worker — required by `make seed` (QMS quantities import runs as tasks).
-  # Same image as the service; in dev mode it runs the BAKED code (no hot reload).
+  # Celery worker — required by `make seed`. Same image as the service; the dev override
+  # mounts the clones into it.
   worker:
     build:
       context: .
@@ -252,8 +252,7 @@ services:
         branch: ${SERVICE_BRANCH:-master}
         ref: ${SERVICE_REF:-unknown}
     profiles: [service]
-    # Queue list is duplicated in docker-compose.dev.yml (the dev command replaces this one) — change both.
-    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
+    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,atlas_default,atlas_images,atlas_results,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
     environment:
       ENVIRONMENT: development
       DEBUG: "true"

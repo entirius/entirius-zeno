@@ -6,8 +6,6 @@ It bridges compose env vars to Django settings; baked into the image at build
 and refreshed on every dev-mode start. Change .env on the host, not this file.
 """
 
-import importlib.util
-
 import dj_database_url
 from celery.schedules import crontab
 from decouple import Csv, config
@@ -186,14 +184,11 @@ LOCAL_APPS = [
     "django_utils_translator",
     "django_pim",
     "django_pricemanager",
-    # Private modules — no PyPI release, absent from the service uv.lock; dev mode
-    # editable-installs the repos/django/ clones. Guarded by importability so baked
-    # mode (make up) and dev without the private clones still boot instead of
-    # crash-looping on ModuleNotFoundError.
-    # atlas before pricefighter: pricefighter services import django_atlas.
-    *(m for m in ("django_atlas", "django_pricefighter") if importlib.util.find_spec(m)),
-    # lookup (private, plan 02): fingerprints over PIM + atlas; providers wired by plan 03.
-    *(m for m in ("django_lookup",) if importlib.util.find_spec(m)),
+    # atlas before pricefighter: pricefighter services import django_atlas; lookup fingerprints
+    # over PIM + atlas.
+    "django_atlas",
+    "django_pricefighter",
+    "django_lookup",
     # leads platform (on PyPI since 2026-09-15): toolbox client, then the leaves —
     # leads depends on siteintel + communicator, communicator on notifications.
     "django_utils.toolbox",
