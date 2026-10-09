@@ -30,19 +30,20 @@ init:  ## Create .env from template + repos/ layout
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa repos/docs repos/www
 
-setup:  ## One command to a seeded stack: clones, dev stack, mail, CMS, toolbox check, seed (REFS=release|develop|"<branch …>" EMBED=1 SEED=0 SETUP_DRY=1)
+setup:  ## One command to a seeded baked stack: build, up, mail, frontends, toolbox check, seed (DEV=1 [REFS=… SETUP_DRY=1] EMBED=1 SEED=0)
+	@command -v python3 >/dev/null 2>&1 || { echo "make setup needs python3 (see README § Requirements)"; exit 1; }
 	@python3 scripts/setup.py
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
-		git clone git@github.com:entirius/$(SERVICE).git repos/services/$(SERVICE)
+		git clone https://github.com/entirius/$(SERVICE).git repos/services/$(SERVICE)
 
 clone-repos:  ## Clone ALL entirius repos into repos/ groups; modules pinned to service uv.lock versions
 	@sh scripts/clone-repos.sh $(SERVICE)
 
 clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
 	@test -d $(TESTS_PATH)/$(TESTS_REPO)/.git || \
-		git clone git@github.com:entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
+		git clone https://github.com/entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
 
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
@@ -64,9 +65,9 @@ ref=$$(GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/entirius/$(1).git 
 [ -n "$$ref" ] || { echo "cannot resolve entirius/$(1)@$(2) - missing repo, branch/tag, or not public?"; exit 1; }
 endef
 
-build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
+build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub; BUILD_ARGS="--no-cache --pull" for a cold build)
 	@$(call REF,$(SERVICE),$${SERVICE_BRANCH:-master}); \
-	SERVICE_REF=$$ref $(COMPOSE) $(PROFILES) build
+	SERVICE_REF=$$ref $(COMPOSE) $(PROFILES) build $(BUILD_ARGS)
 
 up:  ## Start infra + service (code baked into the image)
 	@$(call REQUIRE_IMAGE)
@@ -197,18 +198,20 @@ smoke:  ## Boot proof: migrations, system check, admin + API over HTTP, session 
 
 pwa:  ## Start the storefront (build from GitHub on first run)
 	@$(call REF,entirius-pwa-storefront,$${PWA_BRANCH:-develop}); \
-	PWA_REF=$$ref $(COMPOSE) $(PROFILES) --profile pwa up -d --build pwa
+	export PWA_REF=$$ref; $(COMPOSE) $(PROFILES) --profile pwa build $(BUILD_ARGS) pwa && \
+	$(COMPOSE) $(PROFILES) --profile pwa up -d pwa
 	@$(MAKE) --no-print-directory urls
 
 cms:  ## Start the admin CMS (build from GitHub on first run)
 	@$(call REF,entirius-pwa-cms,$${CMS_BRANCH:-develop}); \
-	CMS_REF=$$ref $(COMPOSE) $(PROFILES) --profile cms up -d --build cms
+	export CMS_REF=$$ref; $(COMPOSE) $(PROFILES) --profile cms build $(BUILD_ARGS) cms && \
+	$(COMPOSE) $(PROFILES) --profile cms up -d cms
 	@$(MAKE) --no-print-directory urls
 
 cms-dev:  ## Start the admin CMS from repos/pwa/entirius-pwa-cms (hot reload)
 	@test -d repos/pwa/entirius-pwa-cms/.git || \
 		{ echo "ERROR: repos/pwa/entirius-pwa-cms not cloned — run:"; \
-		  echo "  git clone git@github.com:entirius/entirius-pwa-cms.git repos/pwa/entirius-pwa-cms"; exit 1; }
+		  echo "  git clone https://github.com/entirius/entirius-pwa-cms.git repos/pwa/entirius-pwa-cms"; exit 1; }
 	@$(MAKE) --no-print-directory cms COMPOSE="$(COMPOSE_DEV)"
 
 cms-dev-s2:  ## Second CMS dev server on :8181 from the worktree repos/pwa/entirius-pwa-cms-s2 (dev-runner stream 2)
