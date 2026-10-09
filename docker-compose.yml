@@ -348,4 +348,5 @@ volumes:
 
 networks:
   zeno:
-    name: entirius-zeno
+    # Follows the project name: a second stack (ZENO_STACK=<suffix> make init) gets its own network.
+    name: ${COMPOSE_PROJECT_NAME:-entirius-zeno}

@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean stranger-run
 .DEFAULT_GOAL := help
 
 -include .env
@@ -22,12 +22,18 @@ WWW_PATH ?= ./repos/www
 WWW_BRANCH ?= master
 WWW_REPO = ssh://git@gitlab.lazelab.com:4227/entirius/entirius-react-www.git
 TESTS_REPO = entirius-test-package-emporium
+ZENO_PORT_OFFSET ?= 1000
 
 help:  ## List targets
 	@grep -E '^[a-z0-9-]+:.*##' $(firstword $(MAKEFILE_LIST)) | awk -F':.*##' '{printf "  %-12s %s\n", $$1, $$2}'
 
-init:  ## Create .env from template + repos/ layout
-	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
+# ZENO_STACK=<suffix> (in a separate checkout): the .env of an isolated second stack — own project name,
+# every host port shifted by ZENO_PORT_OFFSET. Written through a temp file: a failed generation leaves no .env.
+init:  ## Create .env from template + repos/ layout (ZENO_STACK=s2 [ZENO_PORT_OFFSET=1000] = an isolated second stack)
+	@test -f .env || if [ -n "$(ZENO_STACK)" ]; then \
+		sh scripts/isolated-env.sh "$(ZENO_STACK)" "$(ZENO_PORT_OFFSET)" > .env.tmp || { rm -f .env.tmp; exit 1; }; \
+		mv .env.tmp .env && echo "Created .env for the isolated stack entirius-zeno-$(ZENO_STACK) (ports +$(ZENO_PORT_OFFSET))"; \
+	else cp .env.example .env && echo "Created .env from .env.example"; fi
 	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa repos/docs repos/www
 
 setup:  ## One command to a seeded baked stack: build, up, mail, frontends, toolbox check, seed (DEV=1 [REFS=… SETUP_DRY=1] EMBED=1 SEED=0)
@@ -312,6 +318,9 @@ hotfix-status:  ## Hotfix agent: plans, releases, last log lines
 
 hotfix-stop:  ## Stop the hotfix agent after the current tick
 	@mkdir -p .runner/hotfix && touch .runner/hotfix/STOP && echo "STOP set — make hotfix-agent to start again"
+
+stranger-run:  ## Quickstart from zero on an isolated second stack, every step timed (ZENO_STACK=s2 KEEP=1 RECIPE=… OUT=…; see scripts/stranger-run.sh)
+	@bash scripts/stranger-run.sh
 
 check:  ## Verify the canonical .gitleaks.toml is linked here and in every mounted clone
 	@sh scripts/check-gitleaks-links.sh

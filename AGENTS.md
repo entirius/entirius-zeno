@@ -9,7 +9,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Command | Meaning |
 |---|---|
 | `make setup` | one command to a seeded baked stack: prerequisites, test package, build, up, mail, frontends, toolbox check (missing toolbox = DEGRADED, not fatal), seed; `DEV=1` = clones + dev mounts + CMS hot reload (`REFS=release\|develop\|<feature branches>`, `SETUP_DRY=1`); `EMBED=1`, `SEED=0`; `--dry-run` on `scripts/setup.py` prints the steps |
-| `make init` / `clone` | bootstrap `.env` + https clone of the service under test |
+| `make init` / `clone` | bootstrap `.env` + https clone of the service under test; `ZENO_STACK=s2 make init` in a separate checkout writes the `.env` of an isolated second stack (project `entirius-zeno-s2`, every host port +`ZENO_PORT_OFFSET`, default 1000) |
 | `make clone-repos` | https clones of all entirius repos into `repos/` groups, modules at uv.lock versions (`gh` lists the org) |
 | `make build` / `up` / `down` | build image (`BUILD_ARGS="--no-cache --pull"` = cold build; also on `pwa` / `cms`), start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
@@ -29,6 +29,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
 | `make hotfix-agent` / `hotfix-status` / `hotfix-stop` | CMS hotfix agent: takes cms-blueprint issues from the internal Redmine (New/To Do, unassigned or ours), fixes them through the dev-runner on a `hotfix/<issue>` worktree (`repos/pwa/entirius-pwa-cms-hotfix`, from `origin/master`) and releases the next patch version on GitHub; max 3 releases/day, $25/issue; runbook `scripts/hotfix-agent/README.md` |
+| `make stranger-run` | the first run from zero on an isolated second stack, every step timed into one JSON: a clone of this tree in `.runner/stranger/`, no SSH, no `gh`, no `uv`, cold `make setup`, checks, cached re-run, teardown, then the service alone with `uv` (`ZENO_STACK=s2`, `ZENO_PORT_OFFSET=1000`, `STRANGER_BRANCH`, `BUILD_ARGS`, `RECIPE`, `KEEP=1`, `SERVICE_ONLY=0`, `OUT`, `STRANGER_DIR`); built from the service lock, so a stack without access until access ships in it |
 | `make check` | guard: canonical `.gitleaks.toml` symlink present |
 | `make clean` | remove containers and volumes |
 
@@ -89,6 +90,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 
 ## Gotchas
 
+- An isolated stack is a separate checkout: `ZENO_STACK=s2 make init` there, never a second `.env` here. A checkout
+  without its own `.env` resolves to the main project name — `make down` / `clean` there would hit the main stack.
 - Scripted `docker compose` here MUST pass profiles — without them `ps -q` resolves
   nothing (services depend on `db` from the `infra` profile).
 - `make clone-tests` before `make up` — the test-package checkout is bind-mounted into
