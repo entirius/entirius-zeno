@@ -8,10 +8,10 @@ No application code lives here — compose + Makefile + Dockerfile only.
 
 | Command | Meaning |
 |---|---|
-| `make setup` | one command to a seeded stack: clones (`REFS=release\|develop`), dev, mail, CMS, toolbox check (missing toolbox = DEGRADED, not fatal), seed (`EMBED=1`, `SEED=0`); a feature world: `REFS="feature/x feature/y"` puts every clean clone (service and docs too) on the first listed branch it has, else develop, and starts the docs portal; `SETUP_DRY=1` only prints where each clone would land |
-| `make init` / `clone` | bootstrap `.env` + local clone of the service under test |
-| `make clone-repos` | clone all entirius repos into `repos/` groups, modules at uv.lock versions |
-| `make build` / `up` / `down` | build image, start/stop the stack (service, worker, beat) |
+| `make setup` | one command to a seeded baked stack: prerequisites, test package, build, up, mail, frontends, toolbox check (missing toolbox = DEGRADED, not fatal), seed; `DEV=1` = clones + dev mounts + CMS hot reload (`REFS=release\|develop\|<feature branches>`, `SETUP_DRY=1`); `EMBED=1`, `SEED=0`; `--dry-run` on `scripts/setup.py` prints the steps |
+| `make init` / `clone` | bootstrap `.env` + https clone of the service under test |
+| `make clone-repos` | https clones of all entirius repos into `repos/` groups, modules at uv.lock versions (`gh` lists the org) |
+| `make build` / `up` / `down` | build image (`BUILD_ARGS="--no-cache --pull"` = cold build; also on `pwa` / `cms`), start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
@@ -42,7 +42,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 - `make dev`: bind-mounts `repos/` over the image; a named volume shadows the service
   `.venv` (host clone's venv untouched); the entrypoint re-syncs and editable-installs
   every module repo found in `repos/py/` and `repos/django/`. The worker gets the same
-  mounts with its own venv volume and additionally consumes the `atlas_*` Celery queues.
+  mounts with its own venv volume; its queue list lives in `docker-compose.yml` only.
 - Host ports are shifted +100 from standard (postgres 5532, redis 6479, rabbitmq 5772,
   service 8100, embed 8097) — developers run local instances on the standard ones.
 - `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`, `pwa/`
@@ -53,8 +53,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed, `make mail`, toolbox up) | 1264 passed / 0 failed / 15 skipped, gate in `enforce` (develop after the access merge, measured 2026-10-09; was 696 before `@access`) | ~3.5 min |
-| `make bdd TAGS=@access` (seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507); re-runnable, not one-shot (measured 2026-10-09) | ~1 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1264 passed / 0 failed / 15 skipped, gate in `enforce` (develop after the access merge, measured 2026-10-09; was 696 before `@access`) | ~3.5 min |
+| `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507); re-runnable, not one-shot (measured 2026-10-09) | ~1 min |
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
@@ -113,8 +113,6 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   intel analyses every 10 min once the toolbox answers.
 - The toolbox must be up before seed: `make toolbox-check` green first — it runs outside zeno (its own repo,
   `runserver 0.0.0.0:8300`), containers reach it as `host.docker.internal`.
-- Worker `-Q` lives in both compose files — the dev command replaces the baked one; a queue added to one file
-  only makes its tasks queue forever in the other mode.
 - Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
   create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc
   collation: run `REINDEX DATABASE entirius` once after the switch).
@@ -128,7 +126,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   vectors left the search resolving ties by traversal order, so the image leg looked random. With
   real vectors it is deterministic — three fresh seeds returned the same number.
   `manage.py lookup_doctor` is the handshake that catches it.
-- The access gate (`django_access`) is on in `enforce`; the mode comes from `.env` `ACCESS_GATE_MODE` (`enforce` |
+- The access gate runs in dev mode until access ships in the service lock (the baked stack has no gate, no role
+  users, no `@access` scenarios). In dev mode `django_access` is on in `enforce`; the mode comes from `.env` `ACCESS_GATE_MODE` (`enforce` |
   `observe` | `off`) through compose — a changed value needs `make dev` (a restart keeps the old env). Staff see it
   as `gate_mode` in `GET api/access/v2/me/`.
 - Seed creates the staff role users `viewer`, `editor`, `manager`, `accessadmin` (Administrator) and `norole` (staff,

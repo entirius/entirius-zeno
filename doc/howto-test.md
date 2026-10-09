@@ -4,15 +4,24 @@ Zeno runs a full Entirius/Volkanos service with its infrastructure and hands you
 interface — `make`. This guide is for **verifying the platform**: seeding demo data,
 exploring the running stack, running the BDD suite.
 Developing modules or the service: [howto-develop.md](howto-develop.md).
-Command reference: [README](../README.md).
+Quick start: [README](../README.md); commands: [howto-develop.md](howto-develop.md#commands).
 
-## First run (5 commands)
+## First run
+
+```bash
+make setup        # prerequisites, test package, build, up, mail, frontends, toolbox check, seed
+```
+
+`make setup` ends with the URLs and logins. `SEED=0` stops before seeding, `DEV=1` runs the
+developer stack instead ([howto-develop.md](howto-develop.md)). The same steps by hand:
 
 ```bash
 make init         # .env + repos/ layout
 make clone-tests  # test package — bind-mounted into the stack, so clone it before `up`
 make build        # bake the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
-make up           # postgres + redis + rabbitmq + service + celery worker + fixtures http
+make up           # postgres + redis + rabbitmq + service + celery worker + beat + fixtures http
+make mail         # GreenMail mail sandbox
+make frontends    # storefront + admin CMS, built from GitHub
 make seed         # Emporium demo dataset: products, prices, stock, discounts (~15-25 min)
 ```
 
@@ -42,6 +51,9 @@ make bdd TAGS=@checkout       # tag list: repos/tests/*/README.md
 
 The suite is a black-box API consumer: it reads expectations from the dataset's CSV files,
 so it verifies whatever the package actually seeded — no hardcoded values.
+`make bdd` and `make e2e` run on the host and need `uv`; `make e2e` (Playwright, storefront +
+CMS) also needs its browser once:
+`cd repos/tests/entirius-test-package-emporium && uv run --extra e2e playwright install chromium`.
 
 Two tags are excluded by default (see the test repo README):
 `@spec-first` (scenarios written ahead of their module) and `@blocked-by-module`
