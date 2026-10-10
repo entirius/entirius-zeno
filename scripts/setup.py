@@ -12,6 +12,7 @@
     SETUP_DRY=1 make setup DEV=1 REFS=…   # print which ref every clone would land on; change nothing
     make setup EMBED=1              # also start the embedding service (lookup)
     make setup SEED=0               # stop before seeding
+    RECIPE=<name> make setup        # a recipe (recipes/<name>/) on a fresh checkout: `make init` writes it to .env
     python3 scripts/setup.py --dry-run    # print the step plan; touch nothing
     SERVICE_BRANCH=<branch> python3 scripts/setup.py   # service branch other than .env for one run
 
@@ -98,6 +99,26 @@ def env_value(key, default):
 
 def service_branch():
     return os.environ.get("SERVICE_BRANCH") or env_value("SERVICE_BRANCH", "develop")
+
+
+def recipe():
+    """The recipe of this checkout: .env first (chosen at `make init`), the environment before .env exists."""
+    return env_value("RECIPE", "") or os.environ.get("RECIPE") or "shop"
+
+
+def recipe_apps():
+    resolved = subprocess.run(
+        ("sh", "recipes/resolve.sh", "apps"),
+        cwd=ROOT, env={**os.environ, "RECIPE": recipe()}, capture_output=True, text=True, check=False,
+    )
+    if resolved.returncode:
+        sys.exit(f"setup: {resolved.stderr.strip()}")
+    return resolved.stdout.split()
+
+
+def has_storefront():
+    """The storefront reads the read model: without django_matrix only the CMS is started."""
+    return "django_matrix" in recipe_apps()
 
 
 def preflight():
@@ -236,12 +257,16 @@ def start(target):
         )
 
 
+def frontend_targets(dev):
+    cms = "cms-dev" if dev else "cms"
+    if not has_storefront():
+        return [cms]
+    return ["pwa", cms] if dev else ["frontends"]
+
+
 def frontends(dev):
-    if not dev:
-        run("make", "frontends")
-        return
-    run("make", "pwa")
-    run("make", "cms-dev")
+    for target in frontend_targets(dev):
+        run("make", target)
 
 
 def docs():
@@ -291,6 +316,7 @@ def summary(config, statuses):
     run("make", "urls", check=False)
     print("CMS and Django admin: admin / admin123")
     print("mail sandbox: sandbox / sandbox")
+    print(f"recipe: {recipe()}")
     mode = statuses.get(TOOLBOX_MODE, "full")
     print(f"toolbox mode: {mode}")
     for line in TOOLBOX_NOTES.get(mode, ()):
@@ -321,7 +347,7 @@ def checkout_steps(config):
 
 def stack_steps(config):
     target = "dev" if config.dev else "up"
-    front = "make pwa; make cms-dev" if config.dev else "make frontends"
+    front = "; ".join(f"make {target}" for target in frontend_targets(config.dev))
     has_docs = config.world and (ROOT / "repos/docs/entirius-docs/.git").exists()
     return [
         Step("build", f"make build SERVICE_BRANCH={service_branch()}",
@@ -341,7 +367,8 @@ def steps(config, statuses):
         *stack_steps(config),
         Step("toolbox", "make toolbox-check", lambda: toolbox(statuses)),
         Step("seed", "make seed", lambda: run("make", "seed"), config.seed),
-        Step("summary", "make dashboard; make urls; logins; toolbox mode", lambda: summary(config, statuses)),
+        Step("summary", f"make dashboard; make urls; logins; recipe: {recipe()}; toolbox mode",
+             lambda: summary(config, statuses)),
     ]
 
 
