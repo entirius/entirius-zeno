@@ -18,7 +18,10 @@
 #   OUT               result file (todo/docs-launch/memo/stranger-run.json)
 #   KEEP              1 = leave the stack running (0)
 #   BUILD_ARGS        build flags of the first setup ("--no-cache --pull": a cold build)
-#   RECIPE            passed to `make setup` when set
+#   RECIPE            recipe of the isolated stack (recipes/<name>/), written to its .env; unset = shop
+#   TESTS_FROM        github = setup clones the test package (default); local = this tree's clone of it, at its
+#                     current branch with its uncommitted work
+#   BDD               1 = `make bdd` after the checks, with the real PATH (0); its verdict never fails the run
 #   SERVICE_ONLY      0 = skip phase 2 (1)
 #
 # The isolated stack never shares a name with the main one: every compose call runs in the checkout with its own
@@ -36,10 +39,13 @@ OUT=$(realpath -m "${OUT:-todo/docs-launch/memo/stranger-run.json}")
 KEEP=${KEEP:-0}
 BUILD_ARGS=${BUILD_ARGS---no-cache --pull}
 RECIPE=${RECIPE:-}
+TESTS_FROM=${TESTS_FROM:-github}
+BDD=${BDD:-0}
 SERVICE_ONLY=${SERVICE_ONLY:-1}
 CHECKOUT=$WORK/entirius-zeno
 LOGS=$WORK/logs
 STEPS_FILE=$WORK/steps.tsv
+TESTS_CLONE=repos/tests/entirius-test-package-emporium
 BARE_PORT=8900
 PROFILES=(--profile infra --profile service --profile pwa --profile cms)
 STRANGER_ENV=()
@@ -108,26 +114,37 @@ remove_stack() { # containers, volumes, images and the checkout of the isolated 
   rm -rf "$CHECKOUT"
 }
 
-copy_dirty() { # the uncommitted state of this tree: tracked changes as a patch, untracked non-ignored files copied
-  git diff HEAD --binary >"$WORK/dirty.patch"
-  if [[ -s $WORK/dirty.patch ]]; then git -C "$CHECKOUT" apply "$WORK/dirty.patch"; fi
-  git ls-files -o --exclude-standard -z | xargs -0 -r cp -p --parents -t "$CHECKOUT"
+copy_dirty() { # source tree, its clone → the uncommitted state: tracked changes as a patch, untracked files copied
+  git -C "$1" diff HEAD --binary >"$WORK/dirty.patch"
+  if [[ -s $WORK/dirty.patch ]]; then git -C "$2" apply "$WORK/dirty.patch"; fi
+  (cd "$1" && git ls-files -o --exclude-standard -z | xargs -0 -r cp -p --parents -t "$2")
 }
 
-do_clone() { # leftovers of an earlier run first; the .env is written here so no later command can miss it
+do_clone() { # leftovers of an earlier run first; the .env, recipe included, is written here so no later command can miss it
   remove_stack
   stranger git clone --branch "$BRANCH" "file://$ROOT" "$CHECKOUT"
-  if [[ $DIRTY == true ]]; then copy_dirty; fi
-  in_checkout ZENO_STACK="$STACK" ZENO_PORT_OFFSET="$OFFSET" make init
+  if [[ $DIRTY == true ]]; then copy_dirty "$ROOT" "$CHECKOUT"; fi
+  in_checkout ZENO_STACK="$STACK" ZENO_PORT_OFFSET="$OFFSET" RECIPE="$RECIPE" make init
   isolated
 }
 
+do_clone_tests() { # this tree's test package where `make clone-tests` looks for it: setup then clones nothing from GitHub
+  local source=$ROOT/$TESTS_CLONE branch
+  branch=$(git -C "$source" branch --show-current)
+  [[ -n $branch ]] || { echo "$TESTS_CLONE is on a detached HEAD"; return 1; }
+  stranger git clone --branch "$branch" "file://$source" "$CHECKOUT/$TESTS_CLONE"
+  copy_dirty "$source" "$CHECKOUT/$TESTS_CLONE"
+}
+
+has_matrix() { # the storefront and the product API read the read model
+  RECIPE=$RECIPE sh "$CHECKOUT/recipes/resolve.sh" apps | grep -qx django_matrix
+}
+
 do_setup() { # make setup on the isolated stack; its `setup: step` lines become the setup/<slug> rows
-  local started=$SECONDS rc recipe=()
-  if [[ -n $RECIPE ]]; then recipe=(RECIPE="$RECIPE"); fi
+  local started=$SECONDS rc
   echo "== setup (log: $LOGS/setup.log)"
   set +e
-  in_checkout ZENO_STACK="$STACK" ZENO_PORT_OFFSET="$OFFSET" BUILD_ARGS="$BUILD_ARGS" "${recipe[@]}" make setup \
+  in_checkout ZENO_STACK="$STACK" ZENO_PORT_OFFSET="$OFFSET" BUILD_ARGS="$BUILD_ARGS" make setup \
     >"$LOGS/setup.log" 2>&1
   rc=$?
   set -e
@@ -162,15 +179,27 @@ frontend() { # result key, port variable → HTTP code of GET /; dev servers com
   [[ $code == 200 ]]
 }
 
-api_results() { # products of the seeded channel and the platform object of the module registry
-  local api products platform
-  api=http://localhost:$(env_value SERVICE_PORT "$CHECKOUT/.env")/api
-  products=$(curl -fsS "$api/matrix/v2/$(env_value PWA_CHANNEL "$CHECKOUT/.env")/products/?page_size=100" \
+api_url() { echo "http://localhost:$(env_value SERVICE_PORT "$CHECKOUT/.env")/api"; }
+
+products() { # products of the seeded channel in the read model
+  local products
+  products=$(curl -fsS "$(api_url)/matrix/v2/$(env_value PWA_CHANNEL "$CHECKOUT/.env")/products/?page_size=100" \
     | python3 -c 'import json, sys; print(len(json.load(sys.stdin)["results"]))')
   fact_json result.products "$products"
-  platform=$(curl -fsS "$api/munin/v2/" | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["platform"]))')
-  fact_json result.munin_platform "$platform"
   ((products > 0))
+}
+
+munin_platform() { # the platform object of the module registry
+  local platform
+  platform=$(curl -fsS "$(api_url)/munin/v2/" | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["platform"]))')
+  fact_json result.munin_platform "$platform"
+}
+
+access_installed() { # whether the booted service runs access: its INSTALLED_APPS, not the package alone
+  local installed
+  installed=$(in_checkout docker compose "${PROFILES[@]}" exec -T service python manage.py shell -c \
+    'from django.conf import settings; print("access_installed", "django_access" in settings.INSTALLED_APPS)')
+  fact_json isolation.access_installed "$(grep -q '^access_installed True' <<<"$installed" && echo true || echo false)"
 }
 
 toolbox_facts() { # the toolbox state setup met, and what a stack without it cannot do
@@ -195,11 +224,40 @@ do_verify() {
   else
     fact_json result.access false
   fi
+  access_installed
   make_result health health
   make_result smoke smoke
   frontend cms CMS_PORT
+  munin_platform
+  if ! has_matrix; then record verify/storefront 0 skipped; return 0; fi # the recipe has no read model
   frontend storefront PWA_PORT
-  api_results
+  products
+}
+
+bdd_summary() { # behave log → {"features": {passed, failed, skipped}, "scenarios": {…}} or null; exit 0 = no scenario failed
+  python3 - "$1" <<'PY'
+import json
+import re
+import sys
+
+counts = {}
+for passed, kind, rest in re.findall(r"^(\d+) (feature|scenario)s? passed, (.*)$", open(sys.argv[1], errors="replace").read(), re.M):
+    other = {name: int(number) for number, name in re.findall(r"(\d+) (\w+)", rest)}
+    failed = sum(number for name, number in other.items() if name != "skipped")  # failed, error, hook_error
+    counts[f"{kind}s"] = {"passed": int(passed), "failed": failed, "skipped": other.get("skipped", 0)}
+print(json.dumps(counts if len(counts) == 2 else None))
+sys.exit(len(counts) != 2 or counts["scenarios"]["failed"] > 0)
+PY
+}
+
+do_bdd() { # the suite needs uv, so it gets the real PATH; a red suite is `degraded`, never a failed run
+  local started=$SECONDS status=ok log=$LOGS/bdd.log summary
+  echo "== bdd (log: $log)"
+  in_checkout PATH="$PATH" make bdd >"$log" 2>&1 || true
+  summary=$(bdd_summary "$log") || status=degraded
+  fact_json result.bdd "$summary"
+  record bdd $((SECONDS - started)) "$status"
+  echo "   $((SECONDS - started))s $status"
 }
 
 git_version() { # versions key, git command prefix… → branch and short commit of a clone
@@ -234,8 +292,10 @@ do_down() { # the containers' last words first: after a failed run they are the 
 
 phase_one() {
   step clone do_clone
+  if [[ $TESTS_FROM == local ]]; then step clone-tests-local do_clone_tests; fi
   do_setup
   step verify do_verify
+  if [[ $BDD == 1 ]]; then do_bdd; fi
   step versions do_versions
   step rerun do_rerun
 }
@@ -312,7 +372,8 @@ host_facts() {
 
 run_facts() { # fixed keys first: a run that fails early still writes every one of them
   local key
-  for key in result.{health,seed,smoke,cms_http,storefront_http,products,munin_platform,access} toolbox.{mode,reason} \
+  for key in result.{health,seed,smoke,cms_http,storefront_http,products,munin_platform,access,bdd} \
+    isolation.access_installed toolbox.{mode,reason} \
     versions.{service,cms,storefront,test_package,images} service_only.{status,reason,python,module_http}; do
     fact_json "$key" null
   done
@@ -329,6 +390,7 @@ run_facts() { # fixed keys first: a run that fails early still writes every one 
   fact isolation.ssh disabled
   fact isolation.build_args "$BUILD_ARGS"
   fact isolation.recipe "$RECIPE"
+  fact isolation.tests_from "$TESTS_FROM"
   fact_json service_only.port "$BARE_PORT"
 }
 
@@ -336,6 +398,7 @@ prepare() {
   [[ $STACK =~ ^[a-z0-9]+$ ]] || { echo "stranger-run: ZENO_STACK must match [a-z0-9]+ (got '$STACK')"; exit 1; }
   [[ $OFFSET =~ ^[1-9][0-9]*$ ]] || { echo "stranger-run: ZENO_PORT_OFFSET must be a positive number"; exit 1; }
   [[ -n $BRANCH ]] || { echo "stranger-run: detached HEAD — set STRANGER_BRANCH"; exit 1; }
+  [[ $TESTS_FROM == github || $TESTS_FROM == local ]] || { echo "stranger-run: TESTS_FROM must be github or local"; exit 1; }
   [[ $WORK != / && $CHECKOUT != "$ROOT" && $ROOT/ != "$CHECKOUT"/* ]] \
     || { echo "stranger-run: STRANGER_DIR must not hold this tree (got '$WORK')"; exit 1; }
   mkdir -p "$WORK" "$(dirname "$OUT")"
