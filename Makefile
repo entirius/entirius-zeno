@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check
 .DEFAULT_GOAL := help
 
 -include .env
@@ -254,6 +254,21 @@ cms-dev-s2:  ## Second CMS dev server on :8181 from the worktree repos/pwa/entir
 	@$(MAKE) --no-print-directory urls
 
 frontends: pwa cms  ## Start both frontends
+
+DOCS_SCREENS_REPO ?= $(DOCS_PATH)/entirius-docs
+DOCS_SCREENS_OUT ?= $(DOCS_SCREENS_REPO)/src/assets/screens
+docs-screens:  ## CMS screenshots for the docs how-tos (GUIDE=<name>; DOCS_SCREENS_REPO=<docs checkout>; needs make cms-dev)
+	@test -d repos/pwa/entirius-pwa-cms/tests/docs || \
+		{ echo "ERROR: repos/pwa/entirius-pwa-cms/tests/docs is missing — the CMS clone has no docs capture project"; exit 1; }
+	@curl -fsS --max-time 5 -o /dev/null http://localhost:$${CMS_PORT:-8180}/ || \
+		{ echo "ERROR: the CMS does not answer on :$${CMS_PORT:-8180} — run: make cms-dev"; exit 1; }
+	@mkdir -p "$(DOCS_SCREENS_OUT)"
+	@cd repos/pwa/entirius-pwa-cms && \
+	DOCS_SCREENS_OUT="$(abspath $(DOCS_SCREENS_OUT))" \
+	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
+	CMS_API_URL=http://localhost:$${SERVICE_PORT:-8100} \
+	npx playwright test -c tests/docs/playwright.docs.config.js \
+		$(if $(GUIDE),tests/docs/guides/$(GUIDE).spec.js,--grep-invert @self-test)
 
 clone-docs:  ## Clone the documentation portal (private GitLab) into repos/docs/
 	@test -d $(DOCS_PATH)/entirius-docs/.git || git clone $(DOCS_REPO) $(DOCS_PATH)/entirius-docs

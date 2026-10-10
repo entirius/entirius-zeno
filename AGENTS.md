@@ -25,6 +25,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
 | `make cms-dev-s2` | second CMS dev server (:8181) from the worktree `repos/pwa/entirius-pwa-cms-s2` — dev-runner stream 2 |
 | `make docs` / `clone-docs` | docs portal (:4421, Astro hot reload) from `repos/docs/entirius-docs` — private GitLab clone, not built from GitHub; `make docs-alt DOCS_ALT_BRANCH=x` runs a second branch on :4422 |
+| `make docs-screens` | CMS screenshots for the docs how-tos, captured from the dev CMS (English, dark, 1280 × 800) by the CMS clone's `tests/docs/` project into `DOCS_SCREENS_REPO` (a docs checkout, default `repos/docs/entirius-docs`) `src/assets/screens/<guide>/`; `GUIDE=<name>` runs one guide, `DOCS_SCREENS_OUT` overrides the folder; needs `make cms-dev`; captures write to the live database |
 | `make www WWW_BRANCH=x` | marketing site entirius.com (:3200, Next.js hot reload) from `repos/www/entirius-react-www-<branch>` — private GitLab clone |
 | `make schema` / `schema-check` | public OpenAPI specs from the running service into `build/openapi/` (admin / storefront, v2 only, tag groups); `schema-check` diffs them against the docs worktree (`SCHEMA_DOCS`), exit 1 on drift |
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
