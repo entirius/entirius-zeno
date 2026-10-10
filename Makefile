@@ -16,12 +16,13 @@ EMBED_GPU ?= $(shell test -f /etc/cdi/nvidia.yaml && echo 1 || echo 0)
 EMBED_COMPOSE = $(COMPOSE_DEV) $(if $(filter 1,$(EMBED_GPU)),-f docker-compose.gpu.yml)
 SERVICE ?= entirius-service-volkanos
 TESTS_PATH ?= ./repos/tests
+# Directory under TESTS_PATH: the package the targets run and the containers mount (a changed value needs `make dev`).
+TEST_PACKAGE ?= entirius-test-package-emporium
 DOCS_PATH ?= ./repos/docs
 DOCS_REPO = ssh://git@gitlab.lazelab.com:4227/entirius/entirius-docs.git
 WWW_PATH ?= ./repos/www
 WWW_BRANCH ?= master
 WWW_REPO = ssh://git@gitlab.lazelab.com:4227/entirius/entirius-react-www.git
-TESTS_REPO = entirius-test-package-emporium
 ZENO_PORT_OFFSET ?= 1000
 
 help:  ## List targets
@@ -50,9 +51,9 @@ clone:  ## Clone the service under test into repos/services/ (dev mode prerequis
 clone-repos:  ## Clone ALL entirius repos into repos/ groups; modules pinned to service uv.lock versions
 	@sh scripts/clone-repos.sh $(SERVICE)
 
-clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
-	@test -d $(TESTS_PATH)/$(TESTS_REPO)/.git || \
-		git clone https://github.com/entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
+clone-tests:  ## Clone the selected test package (TEST_PACKAGE; data + BDD) into repos/tests/
+	@test -d $(TESTS_PATH)/$(TEST_PACKAGE)/.git || \
+		git clone https://github.com/entirius/$(TEST_PACKAGE).git $(TESTS_PATH)/$(TEST_PACKAGE)
 
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
@@ -284,7 +285,7 @@ docs: clone-docs  ## Start the docs portal from repos/docs/entirius-docs (hot re
 dashboard:  ## Regenerate the Zeno Suite dashboard from the live stack
 	@python3 scripts/dashboard.py
 
-seed:  ## Seed the service with the Emporium test package (fixtures + full import pipeline)
+seed:  ## Seed the service with the selected test package (fixtures + full import pipeline)
 	@CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q service) \
 	DB_CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q db) \
 	SVC_DIR=/entirius/services/$(SERVICE) \
@@ -292,19 +293,19 @@ seed:  ## Seed the service with the Emporium test package (fixtures + full impor
 	DB_NAME=$${POSTGRES_DB:-entirius} \
 	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
 	SEED_PROFILE=$$(cat recipes/$${RECIPE:-shop}/seed-profile) \
-	bash $(TESTS_PATH)/$(TESTS_REPO)/scripts/seed.sh
+	bash $(TESTS_PATH)/$(TEST_PACKAGE)/scripts/seed.sh
 
 # -@spec-first: scenarios ahead of their module; -@blocked-by-module: known module gaps (registry)
-bdd:  ## Run the BDD suite against the running service (TAGS=@tag optional)
+bdd:  ## Run the BDD suite of the selected test package against the running service (TAGS=@tag optional)
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
-	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) bdd TAGS=$(TAGS)
+	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TEST_PACKAGE) bdd TAGS=$(TAGS)
 
-e2e:  ## Run Playwright e2e (storefront + CMS) against the running frontends
+e2e:  ## Run Playwright e2e of the selected test package (storefront + CMS) against the running frontends
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
 	E2E_DEVICE="$(E2E_DEVICE)" \
-	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100} E2E_ARGS="$(E2E_ARGS)"
+	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TEST_PACKAGE) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100} E2E_ARGS="$(E2E_ARGS)"
 
 mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and wait until it is ready
 	@$(COMPOSE) $(PROFILES) up -d greenmail
