@@ -92,35 +92,44 @@ if _enabled("django_lookup", "django_pim"):
 
 # Enrichment bus adapters (plan 06): target_module -> dotted module path, imported lazily by
 # django_enrichment's registry. `atlas` serves the duplicate_in_pim acceptance queue (SpawnRule
-# `atlas-duplicate-in-pim` -> proposal -> accepted link on SourceProduct.real_product).
-ENRICHMENT_ADAPTERS: dict[str, str] = {}
-if _enabled("django_enrichment", "django_atlas"):
-    ENRICHMENT_ADAPTERS["atlas"] = "django_atlas.services.enrichment_adapter"
+# `atlas-duplicate-in-pim` -> proposal -> accepted link on SourceProduct.real_product); `pim` is the referential
+# adapter (attribute values, pictures, classification). A target follows the recipe's apps.
+_ENRICHMENT_TARGETS = {
+    "atlas": "django_atlas.services.enrichment_adapter",
+    "pim": "django_pim.services.enrichment_adapter",
+}
+ENRICHMENT_ADAPTERS: dict[str, str] = {
+    target: path for target, path in _ENRICHMENT_TARGETS.items() if _enabled("django_enrichment", f"django_{target}")
+}
+
+# The demo carries 18 months of simulated history: price history and pricefighter decisions outlive the 365-day default.
+PRICE_HISTORY_RETENTION_DAYS = 730
+PRICEFIGHTER_DECISION_RETENTION_DAYS = 730
 
 # Leads platform — mail goes to the in-network GreenMail sandbox (make mail), never out.
 # django_email resolves SMTP per channel; the global EMAIL_HOST is the fallback for every sender except
 # django_communicator, which sends nothing without the channel's entry (`communicator.smtp` check).
-# The programme's channel idx is `default-europe` everywhere.
+# ZENO_CHANNELS are the channel idxs the harness configures per channel: Emporium's and the Słoik Chwil ones.
+ZENO_CHANNELS = ("default-europe", "sloik-pl", "sloik-eu", "sloik-firmy", "sloik-bdd")
 EMAIL_HOST = "greenmail"
 EMAIL_PORT = 3025
 DEFAULT_FROM_EMAIL = "zeno@greenmail.test"
-# OUTREACH_SMTP_* in .env point the channel at a real server (a "sandbox canary": the channel stays in sandbox
+# OUTREACH_SMTP_* in .env point every channel at a real server (a "sandbox canary": the channels stay in sandbox
 # mode, so every mail still goes to its sandbox mailbox). Unset = GreenMail, the BDD baseline.
-EMAIL_SMTP_CONFIGURATION_CHANNELS = {
-    "default-europe": {
-        "EMAIL_HOST": config("OUTREACH_SMTP_HOST", default="greenmail"),
-        "EMAIL_PORT": config("OUTREACH_SMTP_PORT", default=3025, cast=int),
-        "EMAIL_HOST_USER": config("OUTREACH_SMTP_USER", default="sandbox"),
-        "EMAIL_HOST_PASSWORD": config("OUTREACH_SMTP_PASSWORD", default="sandbox"),
-        "EMAIL_USE_SSL": config("OUTREACH_SMTP_USE_SSL", default=False, cast=bool),
-        "EMAIL_USE_TLS": config("OUTREACH_SMTP_USE_TLS", default=False, cast=bool),
-        "DEFAULT_FROM_EMAIL": config("OUTREACH_SMTP_FROM", default="outreach@greenmail.test"),
-    }
+_OUTREACH_SMTP = {
+    "EMAIL_HOST": config("OUTREACH_SMTP_HOST", default="greenmail"),
+    "EMAIL_PORT": config("OUTREACH_SMTP_PORT", default=3025, cast=int),
+    "EMAIL_HOST_USER": config("OUTREACH_SMTP_USER", default="sandbox"),
+    "EMAIL_HOST_PASSWORD": config("OUTREACH_SMTP_PASSWORD", default="sandbox"),
+    "EMAIL_USE_SSL": config("OUTREACH_SMTP_USE_SSL", default=False, cast=bool),
+    "EMAIL_USE_TLS": config("OUTREACH_SMTP_USE_TLS", default=False, cast=bool),
+    "DEFAULT_FROM_EMAIL": config("OUTREACH_SMTP_FROM", default="outreach@greenmail.test"),
 }
+EMAIL_SMTP_CONFIGURATION_CHANNELS = {channel: _OUTREACH_SMTP for channel in ZENO_CHANNELS}
 # A real server shares that entry with EVERY module on the channel (notifications, contact forms, accounts,
 # checkout …) — the communicator's sandbox mode alone would not stop them. So with a real host, every recipient of
 # every mail is rewritten to ZENO_MAIL_REDIRECT_TO at the transport; without it the service refuses to boot.
-if EMAIL_SMTP_CONFIGURATION_CHANNELS["default-europe"]["EMAIL_HOST"] != "greenmail":
+if _OUTREACH_SMTP["EMAIL_HOST"] != "greenmail":
     from django.core.exceptions import ImproperlyConfigured
     from django.core.mail.backends.smtp import EmailBackend as _SmtpBackend
 
