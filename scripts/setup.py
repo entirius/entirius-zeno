@@ -399,7 +399,8 @@ def main():
     for step in plan:
         statuses[step.slug] = execute(step)
     seeded = "yes" if config.seed else "no"
-    print(f"setup: done {elapsed(started)}s toolbox={statuses.get(TOOLBOX_MODE, "full")} seeded={seeded}")
+    mode = statuses.get(TOOLBOX_MODE, "full")
+    print(f"setup: done {elapsed(started)}s toolbox={mode} seeded={seeded}")
 
 
 if __name__ == "__main__":
