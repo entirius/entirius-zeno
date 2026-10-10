@@ -56,8 +56,9 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1264 passed / 0 failed / 15 skipped, gate in `enforce` (develop after the access merge, measured 2026-10-09; was 696 before `@access`) | ~3.5 min |
-| `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507); re-runnable, not one-shot (measured 2026-10-09) | ~1 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1264 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-10-10; was 696 before `@access`) | ~4 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1250 passed / 0 failed / 29 skipped (`@needs-toolbox` skipped; measured 2026-10-10) | ~3.5 min |
+| `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507); re-runnable, not one-shot (re-measured 2026-10-10) | ~1 min |
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
