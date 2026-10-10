@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe
 .DEFAULT_GOAL := help
 
 -include .env
@@ -29,11 +29,14 @@ help:  ## List targets
 
 # ZENO_STACK=<suffix> (in a separate checkout): the .env of an isolated second stack — own project name,
 # every host port shifted by ZENO_PORT_OFFSET. Written through a temp file: a failed generation leaves no .env.
-init:  ## Create .env from template + repos/ layout (ZENO_STACK=s2 [ZENO_PORT_OFFSET=1000] = an isolated second stack)
-	@test -f .env || if [ -n "$(ZENO_STACK)" ]; then \
+# RECIPE=<name> is written into a newly created .env (an unknown recipe creates none); an existing .env keeps its own.
+init:  ## Create .env from template + repos/ layout (RECIPE=<name>; ZENO_STACK=s2 [ZENO_PORT_OFFSET=1000] = an isolated second stack)
+	@test -f .env || { RECIPE="$(RECIPE)" sh recipes/resolve.sh apps >/dev/null || exit 1; \
+	if [ -n "$(ZENO_STACK)" ]; then \
 		sh scripts/isolated-env.sh "$(ZENO_STACK)" "$(ZENO_PORT_OFFSET)" > .env.tmp || { rm -f .env.tmp; exit 1; }; \
 		mv .env.tmp .env && echo "Created .env for the isolated stack entirius-zeno-$(ZENO_STACK) (ports +$(ZENO_PORT_OFFSET))"; \
-	else cp .env.example .env && echo "Created .env from .env.example"; fi
+	else cp .env.example .env && echo "Created .env from .env.example"; fi || exit 1; \
+	if [ -n "$(RECIPE)" ]; then echo "RECIPE=$(RECIPE)" >> .env; fi; }
 	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa repos/docs repos/www
 
 setup:  ## One command to a seeded baked stack: build, up, mail, frontends, toolbox check, seed (DEV=1 [REFS=… SETUP_DRY=1] EMBED=1 SEED=0)
@@ -141,10 +144,11 @@ SCHEMA_OUT = build/openapi
 SCHEMA_DOCS ?= $(DOCS_PATH)/launch/entirius-docs-launch/public/openapi
 SCHEMA_RUN = $(COMPOSE) $(PROFILES) exec -T service python manage.py spectacular --skip-checks --custom-settings
 
-# The dev entrypoint's copy of docker/settings_local.py, repeated here; an unchanged file is not written.
+# The dev entrypoint's copy of docker/settings_local.py, repeated here; an unchanged file is not written, and a
+# container without the recipes mount (created before it existed) keeps its settings until `make dev` recreates it.
 schema-settings:
 	@mkdir -p $(SCHEMA_OUT)
-	@$(COMPOSE) $(PROFILES) exec -T service sh -c 'cat > /tmp/settings_local.py && { cmp -s /tmp/settings_local.py main/settings_local.py || cp /tmp/settings_local.py main/settings_local.py; }' < docker/settings_local.py
+	@$(COMPOSE) $(PROFILES) exec -T service sh -c 'cat > /tmp/settings_local.py && { [ ! -d /entirius/recipes ] || cmp -s /tmp/settings_local.py main/settings_local.py || cp /tmp/settings_local.py main/settings_local.py; }' < docker/settings_local.py
 
 schema-admin: schema-settings  ## Admin OpenAPI spec into build/openapi/
 	@$(SCHEMA_RUN) main.settings_local.SCHEMA_ADMIN > $(SCHEMA_OUT)/volkanos-api-admin.yaml.tmp 2> $(SCHEMA_OUT)/volkanos-api-admin.log
@@ -287,6 +291,7 @@ seed:  ## Seed the service with the Emporium test package (fixtures + full impor
 	DB_USER=$${POSTGRES_USER:-entirius} \
 	DB_NAME=$${POSTGRES_DB:-entirius} \
 	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
+	SEED_PROFILE=$$(cat recipes/$${RECIPE:-shop}/seed-profile) \
 	bash $(TESTS_PATH)/$(TESTS_REPO)/scripts/seed.sh
 
 # -@spec-first: scenarios ahead of their module; -@blocked-by-module: known module gaps (registry)
@@ -360,8 +365,17 @@ hotfix-status:  ## Hotfix agent: plans, releases, last log lines
 hotfix-stop:  ## Stop the hotfix agent after the current tick
 	@mkdir -p .runner/hotfix && touch .runner/hotfix/STOP && echo "STOP set — make hotfix-agent to start again"
 
-stranger-run:  ## Quickstart from zero on an isolated second stack, every step timed (ZENO_STACK=s2 KEEP=1 RECIPE=… OUT=…; see scripts/stranger-run.sh)
+stranger-run:  ## Quickstart from zero on an isolated second stack, every step timed (ZENO_STACK=s2 KEEP=1 RECIPE=… TESTS_FROM=local BDD=1 OUT=…; see scripts/stranger-run.sh)
 	@bash scripts/stranger-run.sh
+
+recipe-check:  ## Validate a recipe against the service's modules.yaml (RECIPE=shop)
+	@python3 scripts/recipe-check.py $(or $(RECIPE),shop) $(or $(MODULES_YAML),repos/services/$(SERVICE)/modules.yaml)
+
+# The running container has no recipes mount until its next `make dev`, so the app list travels as an argument.
+recipe-probe:  ## Boot the recipe's app set inside the running service container, read-only (RECIPE=shop)
+	@apps=$$(RECIPE=$(or $(RECIPE),shop) sh recipes/resolve.sh apps | paste -sd, -) && [ -n "$$apps" ] && \
+	$(COMPOSE) $(PROFILES) exec -T -e PYTHONDONTWRITEBYTECODE=1 -e RECIPE=$(or $(RECIPE),shop) \
+		-w /entirius/services/$(SERVICE) service python - "$$apps" < scripts/recipe-probe.py
 
 check:  ## Verify the canonical .gitleaks.toml is linked here and in every mounted clone
 	@sh scripts/check-gitleaks-links.sh

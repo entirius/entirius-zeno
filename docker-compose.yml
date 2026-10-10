@@ -94,6 +94,8 @@ services:
       OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
       # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
       ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+      # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
+      RECIPE: ${RECIPE:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -101,6 +103,7 @@ services:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
       # LEADS_IMPORT_TMP_DIR: the queued CSV import written here is read by the worker
       - leads_import_tmp:/tmp/django_leads
+      - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
         condition: service_healthy
@@ -253,7 +256,8 @@ services:
         branch: ${SERVICE_BRANCH:-master}
         ref: ${SERVICE_REF:-unknown}
     profiles: [service]
-    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,atlas_default,atlas_images,atlas_results,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
+    # The queue list is the recipe's queues.txt, read at start.
+    command: ["sh", "-c", "exec celery -A main worker -l info -Q \"$$(sh /entirius/recipes/resolve.sh queues)\""]
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
@@ -277,11 +281,14 @@ services:
       OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
       # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
       ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+      # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
+      RECIPE: ${RECIPE:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
       - leads_import_tmp:/tmp/django_leads
+      - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
         condition: service_healthy
@@ -327,8 +334,12 @@ services:
       OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
       # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
       ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+      # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
+      RECIPE: ${RECIPE:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
         condition: service_healthy

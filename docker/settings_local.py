@@ -7,6 +7,7 @@ and refreshed on every dev-mode start. Change .env on the host, not this file.
 """
 
 import re
+from pathlib import Path
 
 import dj_database_url
 from celery.schedules import crontab
@@ -22,6 +23,26 @@ API_SCHEMA_PUBLIC = True
 # No proxy in front of the service: per-IP throttles key on REMOTE_ADDR. Unset fails check --deploy (volkanos.E001).
 DRF_NUM_PROXIES = 0
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", cast=Csv())
+
+# The recipe (recipes/<name>/ in zeno, mounted by compose) names the modules this stack enables; unset = shop.
+RECIPE = config("RECIPE", default="") or "shop"
+
+
+def _recipe_apps() -> list[str]:
+    """App labels of the recipe's apps.txt, in file order; `#` starts a comment, blank lines are dropped."""
+    path = Path(config("ZENO_RECIPES_DIR", default="/entirius/recipes")) / RECIPE / "apps.txt"
+    lines = (line.partition("#")[0].strip() for line in path.read_text().splitlines())
+    return [line for line in lines if line]
+
+
+# Volkanos modules adopted in this environment (entirius-django-* app labels), in the order of the service's
+# module registry: every module after the modules it requires.
+LOCAL_APPS = _recipe_apps()
+
+
+def _enabled(*apps: str) -> bool:
+    return set(apps) <= set(LOCAL_APPS)
+
 
 # Compose passes DATABASE_URL pointing at the db container — no default, fail-closed.
 DATABASES = {"default": dj_database_url.parse(config("DATABASE_URL"))}
@@ -62,18 +83,19 @@ LOOKUP_IMAGE_ENABLED = True
 # SSRF guard blocks by default (same escape hatch as ATLAS_BLOCK_PRIVATE_HOSTS above).
 LOOKUP_BLOCK_PRIVATE_HOSTS = False
 # kind -> provider module (plan 03). Each entry is imported lazily by django_lookup's registry,
-# so a missing module only breaks that kind — the rest of the stack boots.
-LOOKUP_PROVIDERS: dict[str, str] = {
-    "pim_product": "django_pim.services.lookup_provider",
-    "atlas_source_product": "django_atlas.services.lookup_provider",
-}
+# so a missing module only breaks that kind — the rest of the stack boots. A kind follows the recipe's apps.
+LOOKUP_PROVIDERS: dict[str, str] = {}
+if _enabled("django_lookup", "django_pim"):
+    LOOKUP_PROVIDERS["pim_product"] = "django_pim.services.lookup_provider"
+    if _enabled("django_atlas"):
+        LOOKUP_PROVIDERS["atlas_source_product"] = "django_atlas.services.lookup_provider"
 
 # Enrichment bus adapters (plan 06): target_module -> dotted module path, imported lazily by
 # django_enrichment's registry. `atlas` serves the duplicate_in_pim acceptance queue (SpawnRule
 # `atlas-duplicate-in-pim` -> proposal -> accepted link on SourceProduct.real_product).
-ENRICHMENT_ADAPTERS: dict[str, str] = {
-    "atlas": "django_atlas.services.enrichment_adapter",
-}
+ENRICHMENT_ADAPTERS: dict[str, str] = {}
+if _enabled("django_enrichment", "django_atlas"):
+    ENRICHMENT_ADAPTERS["atlas"] = "django_atlas.services.enrichment_adapter"
 
 # Leads platform — mail goes to the in-network GreenMail sandbox (make mail), never out.
 # django_email resolves SMTP per channel; the global EMAIL_HOST is the fallback for every sender except
@@ -164,6 +186,10 @@ CELERY_BEAT_SCHEDULE = {
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
 }
+# An entry stays only when the app of its task (`django_<x>.…`) is enabled.
+CELERY_BEAT_SCHEDULE = {
+    name: entry for name, entry in CELERY_BEAT_SCHEDULE.items() if _enabled(entry["task"].split(".")[0])
+}
 
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
 # without this the default (ZULU) runs the wrong chain and no catalog stock appears.
@@ -178,59 +204,6 @@ CACHES = {
         "KEY_PREFIX": "zeno",
     }
 }
-
-# Volkanos modules adopted in this environment (entirius-django-* app labels).
-# Order matters: FK targets first — regional/utils before pim, pim/pricemanager
-# before the pim satellites; leaves last.
-LOCAL_APPS = [
-    "django_regional",
-    "django_utils",
-    "django_utils_translator",
-    "django_pim",
-    "django_pricemanager",
-    # atlas before pricefighter: pricefighter services import django_atlas; lookup fingerprints
-    # over PIM + atlas.
-    "django_atlas",
-    "django_pricefighter",
-    "django_lookup",
-    # leads platform (on PyPI since 2026-09-15): toolbox client, then the leaves —
-    # leads depends on siteintel + communicator, communicator on notifications.
-    "django_utils.toolbox",
-    "django_notifications",
-    "django_siteintel",
-    "django_communicator",
-    "django_leads",
-    "django_pim_csv",
-    "django_pim_translator",
-    "django_pim_export_to_magento_api",
-    "django_faq",
-    "django_munin",
-    "django_captcha",
-    "django_agreements",
-    "django_deliverypoints",
-    "django_qms",
-    "django_email",
-    "django_contact_forms",
-    "django_regon_api",
-    "django_baselinker",
-    "django_crypt",
-    "django_enrichment",
-    "django_contentdb",
-    "django_accounts",
-    "django_suppliers",
-    "django_contentdb_translator",
-    "django_sitemap",
-    "django_accounts_export_to_magento_api",
-    "django_vault",
-    "django_reviews",
-    "django_matrix",
-    "django_checkout",
-    "django_checkout_export_to_magento_api",
-    "django_checkout_import_from_magento_api",
-    "django_getresponse",
-    "django_returns",
-    "django_omnibus",
-]
 
 # Guard until the service release registers it itself: django_accounts customer views (@authenticate) call
 # django.contrib.auth.authenticate(request), which only tries these backends. Without JWTAccessBackend the
