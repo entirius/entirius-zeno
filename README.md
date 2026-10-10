@@ -47,8 +47,10 @@ Options, combinable:
 - `make setup EMBED=1`: also start the image-embedding service for product lookup.
 - `python3 scripts/setup.py --dry-run`: print the steps and change nothing.
 
-The AI toolbox runs outside the harness. Without it, `make setup` reports DEGRADED mode and seeds anyway: the stack
-works, AI drafts end `failed` and the AI BDD scenarios fail. The access gate runs in dev mode until access ships in
+The AI toolbox runs outside the harness and is switched off by default (`AI_TOOLBOX_ENABLED=0` in `.env.example`):
+`make setup` reports it as disabled, AI drafts and translations are refused, and `make bdd` skips the scenarios
+tagged `@needs-toolbox`. With the toolbox enabled but not answering, `make setup` reports DEGRADED mode and seeds
+anyway. The access gate runs in dev mode until access ships in
 the service lock.
 
 ## Requirements

@@ -8,7 +8,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 
 | Command | Meaning |
 |---|---|
-| `make setup` | one command to a seeded baked stack: prerequisites, test package, build, up, mail, frontends, toolbox check (missing toolbox = DEGRADED, not fatal), seed; `DEV=1` = clones + dev mounts + CMS hot reload (`REFS=release\|develop\|<feature branches>`, `SETUP_DRY=1`); `EMBED=1`, `SEED=0`; `--dry-run` on `scripts/setup.py` prints the steps |
+| `make setup` | one command to a seeded baked stack: prerequisites, test package, build, up, mail, frontends, toolbox check (disabled = fine, enabled and broken = DEGRADED, never fatal), seed; `DEV=1` = clones + dev mounts + CMS hot reload (`REFS=release\|develop\|<feature branches>`, `SETUP_DRY=1`); `EMBED=1`, `SEED=0`; `--dry-run` on `scripts/setup.py` prints the steps |
 | `make init` / `clone` | bootstrap `.env` + https clone of the service under test; `ZENO_STACK=s2 make init` in a separate checkout writes the `.env` of an isolated second stack (project `entirius-zeno-s2`, every host port +`ZENO_PORT_OFFSET`, default 1000) |
 | `make clone-repos` | https clones of all entirius repos into `repos/` groups, modules at uv.lock versions (`gh` lists the org) |
 | `make build` / `up` / `down` | build image (`BUILD_ARGS="--no-cache --pull"` = cold build; also on `pwa` / `cms`), start/stop the stack (service, worker, beat) |
@@ -18,7 +18,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
 | `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
 | `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |
-| `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model |
+| `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
 | `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`) |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
@@ -116,7 +116,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   `docker/settings_local.py`); the switch lives in Redis and expires after 15 min — a stack whose AI calls all fail
   with `ToolboxConnectionError` while the toolbox is up has the switch on. Beat retries transiently failed drafts and
   intel analyses every 10 min once the toolbox answers.
-- The toolbox must be up before seed: `make toolbox-check` green first — it runs outside zeno (its own repo,
+- With the toolbox enabled it must be up before seed (`make toolbox-check` green); with `AI_TOOLBOX_ENABLED=0` seed
+  and BDD run without it and skip `@needs-toolbox`. It runs outside zeno (its own repo,
   `runserver 0.0.0.0:8300`), containers reach it as `host.docker.internal`.
 - Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
   create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc

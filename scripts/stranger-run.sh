@@ -179,8 +179,8 @@ toolbox_facts() { # the toolbox state setup met, and what a stack without it can
   fact toolbox.mode "$(sed -nE 's/^setup: done .* toolbox=([a-z]+) .*/\1/p' "$LOGS/setup.log")"
   fact toolbox.reason "$reason"
   if grep -q $'^setup/toolbox\t.*\tdegraded$' "$STEPS_FILE"; then
-    if [[ $reason == *"is empty"* ]]; then reason="key empty"; fi
-    echo "ai-toolbox: $reason — AI drafts fail, lead intel is skipped, AI BDD scenarios fail" >>"$WORK/degraded.txt"
+    echo "ai-toolbox: enabled but not answering — AI drafts fail, lead intel analyses fail and are retried," \
+      "@needs-toolbox scenarios skipped" >>"$WORK/degraded.txt"
   fi
   if grep -q $'^setup/embed\t.*\tskipped$' "$STEPS_FILE"; then
     echo "embed: not started (EMBED=1 opts in) — image search falls back to text" >>"$WORK/degraded.txt"

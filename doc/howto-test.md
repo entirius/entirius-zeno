@@ -109,7 +109,7 @@ models.
 
 ```bash
 make mail                     # GreenMail: SMTP :3125, IMAP :3243, REST :8380 (sandbox/sandbox)
-make toolbox-check            # toolbox reachable, AI_TOOLBOX_CHANNEL sees fake models only
+make toolbox-check            # toolbox reachable, AI_TOOLBOX_CHANNEL sees fake models only (or: disabled)
 make seed                     # also purges the mailbox ("GreenMail purged." in Step 1)
 make bdd TAGS=@harness        # SMTP -> GreenMail -> REST, and an IMAP-injected reply
 ```
@@ -134,7 +134,7 @@ only. Guide with all three modes: entirius-docs `guides/leads-end-to-end-testing
 
 ```bash
 make dev                      # service, worker, beat, GreenMail
-make toolbox-check            # before seed — rules call the toolbox while the seed runs
+make toolbox-check            # before seed — with the toolbox enabled, rules call it while the seed runs
 make migrate && make seed     # SEED OK; asserts munin lists leads, communicator, siteintel, notifications
 make bdd TAGS=@funnel         # scenarios Funnel 0 … Funnel 8, one per step
 ```
@@ -160,7 +160,8 @@ Gotchas:
 
 - GreenMail is purged by seed, not by scenarios — mailbox assertions count relative to a count saved in the
   same scenario, never absolute.
-- The toolbox must be up before `make seed` — `make toolbox-check` green first; it runs outside zeno.
+- With the toolbox enabled it must be up before `make seed` — `make toolbox-check` green first; it runs outside
+  zeno. With `AI_TOOLBOX_ENABLED=0` seed and BDD run without it and skip the `@needs-toolbox` scenarios.
 
 A mail that never arrives is usually a queue nobody consumes (worker `-Q` differs between
 `docker-compose.yml` and `docker-compose.dev.yml`) or a channel without an entry in

@@ -78,6 +78,7 @@ services:
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
       # AI toolbox runs outside zeno (its own repo on the host, or the test deployment).
+      AI_TOOLBOX_ENABLED: ${AI_TOOLBOX_ENABLED:-1}
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
@@ -260,6 +261,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_ENABLED: ${AI_TOOLBOX_ENABLED:-1}
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
@@ -309,6 +311,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_ENABLED: ${AI_TOOLBOX_ENABLED:-1}
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}

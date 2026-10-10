@@ -16,11 +16,12 @@
     SERVICE_BRANCH=<branch> python3 scripts/setup.py   # service branch other than .env for one run
 
 Order matters: clones before the stack (bind mounts), mail + CMS before seed, toolbox checked before seed.
-A missing toolbox is not fatal: the stack runs in degraded mode (AI drafts and intel fail visibly) and
-recovers on its own once the toolbox is back (beat retries transient failures).
+The toolbox never stops the run. Switched off (AI_TOOLBOX_ENABLED=0, the .env.example default) the mode is
+`disabled`: AI features are refused on purpose. Enabled but not answering it is `degraded`: AI drafts and intel
+fail visibly and recover on their own once the toolbox is back (beat retries transient failures).
 
 Every step ends with `setup: step <slug> <ok|degraded|skipped|failed> <N>s`; the run ends with
-`setup: done <N>s toolbox=<full|degraded> seeded=<yes|no>`.
+`setup: done <N>s toolbox=<full|degraded|disabled> seeded=<yes|no>`.
 """
 
 import os
@@ -40,6 +41,8 @@ CLONE_GROUPS = ("repos/py", "repos/django", "repos/tests", "repos/pwa")
 WORLD_GROUPS = (*CLONE_GROUPS, "repos/services", "repos/docs")
 PREREQUISITES = ("docker", "git", "make", "curl", "bash")
 PROFILES = ("--profile", "infra", "--profile", "service")
+# Key of the toolbox mode (full | degraded | disabled) next to the step statuses.
+TOOLBOX_MODE = "toolbox-mode"
 
 
 class StepFailed(Exception):
@@ -247,18 +250,35 @@ def docs():
     run("docker", "compose", "--profile", "docs", "restart", "docs")
 
 
-def toolbox():
-    if run("make", "toolbox-check", check=False) == 0:
-        return "ok"
-    print("WARNING: toolbox unreachable or misconfigured — DEGRADED mode (details in the summary).")
-    return "degraded"
+def toolbox_mode(returncode: int, output: str) -> str:
+    if returncode:
+        return "degraded"
+    return "disabled" if output.startswith("toolbox-check: disabled") else "full"
 
 
-def print_degraded():
-    print("  The stack works; AI drafts end `failed`, leads intel is skipped, munin reports toolbox unreachable.")
-    print("  Expect the AI scenarios (communicator drafts, @funnel) to fail in `make bdd`.")
-    print("  Recovery is automatic: once the toolbox answers, beat retries transiently failed drafts and intel")
-    print("  analyses every 10 min (at most 3 times each) — new drafts still wait for review.")
+def toolbox(statuses):
+    check = subprocess.run(
+        ("make", "--no-print-directory", "toolbox-check"), cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    print(check.stdout + check.stderr, end="", flush=True)
+    statuses[TOOLBOX_MODE] = mode = toolbox_mode(check.returncode, check.stdout)
+    if mode == "degraded":
+        print("WARNING: toolbox enabled but unreachable or misconfigured — DEGRADED mode (details in the summary).")
+    return "degraded" if mode == "degraded" else "ok"
+
+
+TOOLBOX_NOTES = {
+    "disabled": (
+        "AI features are switched off (AI_TOOLBOX_ENABLED=0): AI drafts and rewrites are refused, lead intel is",
+        "skipped and runs once enabled, translations answer 503, `make bdd` skips @needs-toolbox scenarios.",
+        "To use the toolbox set AI_TOOLBOX_ENABLED=1 and the AI_TOOLBOX_* values in .env, then `make dev`.",
+    ),
+    "degraded": (
+        "the toolbox is enabled but does not answer or exposes a real model: AI drafts end `failed`, lead intel",
+        "analyses fail and beat retries them every 10 min once it answers, `make bdd` skips @needs-toolbox",
+        "scenarios while munin reports it unreachable.",
+    ),
+}
 
 
 def has_access():
@@ -271,10 +291,10 @@ def summary(config, statuses):
     run("make", "urls", check=False)
     print("CMS and Django admin: admin / admin123")
     print("mail sandbox: sandbox / sandbox")
-    mode = toolbox_mode(statuses)
+    mode = statuses.get(TOOLBOX_MODE, "full")
     print(f"toolbox mode: {mode}")
-    if mode == "degraded":
-        print_degraded()
+    for line in TOOLBOX_NOTES.get(mode, ()):
+        print(f"  {line}")
     if not config.seed:
         print("database not migrated — `make migrate`, or `make seed`")
     elif config.dev and has_access():
@@ -282,10 +302,6 @@ def summary(config, statuses):
     print("next:")
     print("  make bdd          # full BDD (fresh seed; one-shot scenarios consume it) — needs uv on the host")
     print("  make e2e-funnel   # leads funnel e2e, phone + desktop — needs uv on the host")
-
-
-def toolbox_mode(statuses):
-    return "degraded" if statuses.get("toolbox") == "degraded" else "full"
 
 
 def clones_plan(refs):
@@ -323,7 +339,7 @@ def steps(config, statuses):
              preflight),
         *checkout_steps(config),
         *stack_steps(config),
-        Step("toolbox", "make toolbox-check", toolbox),
+        Step("toolbox", "make toolbox-check", lambda: toolbox(statuses)),
         Step("seed", "make seed", lambda: run("make", "seed"), config.seed),
         Step("summary", "make dashboard; make urls; logins; toolbox mode", lambda: summary(config, statuses)),
     ]
@@ -383,7 +399,7 @@ def main():
     for step in plan:
         statuses[step.slug] = execute(step)
     seeded = "yes" if config.seed else "no"
-    print(f"setup: done {elapsed(started)}s toolbox={toolbox_mode(statuses)} seeded={seeded}")
+    print(f"setup: done {elapsed(started)}s toolbox={statuses.get(TOOLBOX_MODE, "full")} seeded={seeded}")
 
 
 if __name__ == "__main__":

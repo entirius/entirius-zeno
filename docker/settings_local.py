@@ -130,7 +130,9 @@ SITEINTEL_URLSCAN_BASE_URL = "http://fixtures:8000/fixtures/siteintel/urlscan"
 SITEINTEL_BLOCK_PRIVATE_HOSTS = False
 SITEINTEL_ALLOWED_HOSTS = ["fixtures"]
 
-# AI toolbox outside zeno (make toolbox-check); compose passes these from .env.
+# AI toolbox outside zeno (make toolbox-check); compose passes these from .env. AI_TOOLBOX_ENABLED=0 switches
+# the AI features off on purpose (munin reports the toolbox as `disabled`); unset keeps it enabled.
+AI_TOOLBOX_ENABLED = config("AI_TOOLBOX_ENABLED", default=True, cast=bool)
 AI_TOOLBOX_BASE_URL = config("AI_TOOLBOX_BASE_URL", default="http://host.docker.internal:8300")
 AI_TOOLBOX_API_KEY = config("AI_TOOLBOX_API_KEY", default="")
 AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
