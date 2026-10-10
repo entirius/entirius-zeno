@@ -226,7 +226,11 @@ do_rerun() { # the documented update path: pull, then setup again on warm caches
   in_checkout ZENO_STACK="$STACK" ZENO_PORT_OFFSET="$OFFSET" BUILD_ARGS= make setup SEED=0
 }
 
-do_down() { if isolated; then in_checkout make down; fi; }
+do_down() { # the containers' last words first: after a failed run they are the only trace of the cause
+  if ! isolated; then return 0; fi
+  in_checkout docker compose "${PROFILES[@]}" logs --no-color --tail 200 >"$LOGS/containers.log" 2>&1 || true
+  in_checkout make down
+}
 
 phase_one() {
   step clone do_clone

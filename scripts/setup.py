@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -209,11 +210,14 @@ def switch_to_world(branches, dry=False):
 
 
 def wait_http(url, seconds):
+    """True once the server answers at all: before the first migrate (seed runs it) every database-backed
+    route, the schema included, answers 500."""
     for _ in range(seconds // 5):
         try:
-            with urllib.request.urlopen(url, timeout=4) as response:
-                if response.status == 200:
-                    return True
+            with urllib.request.urlopen(url, timeout=4):
+                return True
+        except urllib.error.HTTPError:
+            return True
         except OSError:
             pass
         time.sleep(5)
@@ -225,7 +229,7 @@ def start(target):
     port = env_value("SERVICE_PORT", "8100")
     if not wait_http(f"http://localhost:{port}/api/schema/", 600):
         raise StepFailed(
-            "setup: the service did not answer /api/schema/ — see `docker compose logs service`"
+            "setup: the service did not answer on /api/schema/ — see `docker compose logs service`"
         )
 
 
@@ -306,7 +310,7 @@ def stack_steps(config):
     return [
         Step("build", f"make build SERVICE_BRANCH={service_branch()}",
              lambda: run("make", "build", f"SERVICE_BRANCH={service_branch()}")),
-        Step(target, f"make {target}; wait for GET /api/schema/", lambda: start(target)),
+        Step(target, f"make {target}; wait until the service answers", lambda: start(target)),
         Step("mail", "make mail", lambda: run("make", "mail")),
         Step("frontends", front, lambda: frontends(config.dev)),
         Step("embed", "make embed", lambda: run("make", "embed"), config.embed),
