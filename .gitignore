@@ -31,3 +31,6 @@ scripts/dev-runner/STOP
 scripts/dev-runner/.env
 .runner/
 node_modules/
+
+# Generated OpenAPI specs (make schema)
+build/

@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean stranger-run
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check
 .DEFAULT_GOAL := help
 
 -include .env
@@ -134,6 +134,32 @@ lookup-eval:  ## Measure lookup precision/recall on the labelled pairs of the te
 module-test:  ## Run a mounted module's tests in the service container: make module-test MODULE=entirius-django-x
 	@echo "$(MODULE)" | grep -Eq '^[A-Za-z0-9._-]+$$' || { echo "ERROR: MODULE is required (e.g. make module-test MODULE=entirius-django-lookup)"; exit 1; }
 	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && { ! grep -q "^test *=" pyproject.toml || uv pip install -q --python "$$(command -v python)" -e ".[test]"; } && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
+
+# Public OpenAPI specs from the running service. The container never mounts this checkout, so the YAML comes over
+# stdout; spectacular warnings go to the .log next to it. A failed run leaves the previous spec in place.
+SCHEMA_OUT = build/openapi
+SCHEMA_DOCS ?= $(DOCS_PATH)/launch/entirius-docs-launch/public/openapi
+SCHEMA_RUN = $(COMPOSE) $(PROFILES) exec -T service python manage.py spectacular --skip-checks --custom-settings
+
+# The dev entrypoint's copy of docker/settings_local.py, repeated here; an unchanged file is not written.
+schema-settings:
+	@mkdir -p $(SCHEMA_OUT)
+	@$(COMPOSE) $(PROFILES) exec -T service sh -c 'cat > /tmp/settings_local.py && { cmp -s /tmp/settings_local.py main/settings_local.py || cp /tmp/settings_local.py main/settings_local.py; }' < docker/settings_local.py
+
+schema-admin: schema-settings  ## Admin OpenAPI spec into build/openapi/
+	@$(SCHEMA_RUN) main.settings_local.SCHEMA_ADMIN > $(SCHEMA_OUT)/volkanos-api-admin.yaml.tmp 2> $(SCHEMA_OUT)/volkanos-api-admin.log
+	@mv $(SCHEMA_OUT)/volkanos-api-admin.yaml.tmp $(SCHEMA_OUT)/volkanos-api-admin.yaml
+
+schema-storefront: schema-settings  ## Storefront OpenAPI spec into build/openapi/
+	@$(SCHEMA_RUN) main.settings_local.SCHEMA_STOREFRONT > $(SCHEMA_OUT)/volkanos-api-storefront.yaml.tmp 2> $(SCHEMA_OUT)/volkanos-api-storefront.log
+	@mv $(SCHEMA_OUT)/volkanos-api-storefront.yaml.tmp $(SCHEMA_OUT)/volkanos-api-storefront.yaml
+
+schema: schema-admin schema-storefront  ## Public OpenAPI specs (admin / storefront, v2 only, tag groups) from the running service
+	@echo "$(SCHEMA_OUT)/volkanos-api-admin.yaml"
+	@echo "$(SCHEMA_OUT)/volkanos-api-storefront.yaml"
+
+schema-check: schema  ## Regenerate the specs and diff them against the docs worktree (SCHEMA_DOCS); exit 1 on drift
+	@bash scripts/schema-check.sh $(SCHEMA_DOCS)
 
 down:  ## Stop everything
 	$(COMPOSE_DEV) $(ALL_PROFILES) down

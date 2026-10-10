@@ -26,6 +26,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make cms-dev-s2` | second CMS dev server (:8181) from the worktree `repos/pwa/entirius-pwa-cms-s2` — dev-runner stream 2 |
 | `make docs` / `clone-docs` | docs portal (:4421, Astro hot reload) from `repos/docs/entirius-docs` — private GitLab clone, not built from GitHub; `make docs-alt DOCS_ALT_BRANCH=x` runs a second branch on :4422 |
 | `make www WWW_BRANCH=x` | marketing site entirius.com (:3200, Next.js hot reload) from `repos/www/entirius-react-www-<branch>` — private GitLab clone |
+| `make schema` / `schema-check` | public OpenAPI specs from the running service into `build/openapi/` (admin / storefront, v2 only, tag groups); `schema-check` diffs them against the docs worktree (`SCHEMA_DOCS`), exit 1 on drift |
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
 | `make hotfix-agent` / `hotfix-status` / `hotfix-stop` | CMS hotfix agent: takes cms-blueprint issues from the internal Redmine (New/To Do, unassigned or ours), fixes them through the dev-runner on a `hotfix/<issue>` worktree (`repos/pwa/entirius-pwa-cms-hotfix`, from `origin/master`) and releases the next patch version on GitHub; max 3 releases/day, $25/issue; runbook `scripts/hotfix-agent/README.md` |
@@ -140,6 +141,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
 - `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
   service default is staff-only. `DRF_NUM_PROXIES = 0` there (no proxy, `REMOTE_ADDR` only); unset fails `check --deploy` with `volkanos.E001`.
+- `make schema` refreshes `main/settings_local.py` in the service container when `docker/settings_local.py` changed;
+  spectacular warnings are in `build/openapi/*.log`.
 - Ten wrong passwords for one user on `api/token/` block that user from that address for 15 minutes — a probe
   with a stale password locks `admin` out of the CMS and BDD too.
 - `make embed` GPU variant needs the GPU visible to Docker via CDI (`/etc/cdi/nvidia.yaml`,

@@ -6,6 +6,8 @@ It bridges compose env vars to Django settings; baked into the image at build
 and refreshed on every dev-mode start. Change .env on the host, not this file.
 """
 
+import re
+
 import dj_database_url
 from celery.schedules import crontab
 from decouple import Csv, config
@@ -241,3 +243,109 @@ ACCESS_GATE_MODE = config("ACCESS_GATE_MODE", default="enforce")
 
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
+
+# Public OpenAPI specs (make schema): audience split, v2 filter, tag groups; used only through spectacular
+# --custom-settings.
+SCHEMA_AUTH_PATHS = ("/api/token/", "/api/token/refresh/")
+SCHEMA_ADMIN_EXTRA_PREFIXES = ("/api/munin/v2/health/",)
+# Development-only BDD routes (404 outside development): never published.
+_SCHEMA_DEV_ROUTE = re.compile(r"^/api/[^/]+/v2/admin/\{channel_idx\}/test/")
+_SCHEMA_CHANNEL = "{channel_idx}"
+_SCHEMA_METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
+_SCHEMA_UNSORTED = "Unsorted"
+# Group -> module slugs (the path segment after /api/), in display order.
+SCHEMA_TAG_GROUPS: dict[str, tuple[str, ...]] = {
+    "Authentication": ("token",),
+    "Catalog": ("pim", "pricemanager", "qms", "matrix", "lookup", "enrichment"),
+    "Content and Translation": ("contentdb", "faq", "pim-translator", "contentdb-translator"),
+    "Checkout": ("checkout", "deliverypoints"),
+    "Customers and Consents": ("accounts", "agreements"),
+    "Suppliers and Market Data": ("suppliers", "atlas", "pricefighter"),
+    "Leads and Forms": ("leads", "communicator", "siteintel", "contact-forms"),
+    "Platform": ("access", "munin", "regional", "email", "notifications"),
+}
+
+
+def _schema_keeps(path: str) -> bool:
+    versioned = path.startswith("/api/") and "/v2/" in path
+    return (versioned or path in SCHEMA_AUTH_PATHS) and not _SCHEMA_DEV_ROUTE.match(path)
+
+
+def _schema_public(endpoints: list[tuple]) -> list[tuple]:
+    """v2 routes plus the token pair; a global GET goes when its channel-scoped twin exists (writes stay)."""
+    kept = [endpoint for endpoint in endpoints if _schema_keeps(endpoint[0])]
+    splits = (endpoint[0].partition(_SCHEMA_CHANNEL) for endpoint in kept)
+    twins = {before.rstrip("/") + after for before, found, after in splits if found}
+    return [endpoint for endpoint in kept if not (endpoint[2] == "GET" and endpoint[0] in twins)]
+
+
+def _schema_is_admin(path: str) -> bool:
+    return "/v2/admin/" in path or path.startswith(SCHEMA_ADMIN_EXTRA_PREFIXES) or path in SCHEMA_AUTH_PATHS
+
+
+def schema_admin_endpoints(endpoints: list[tuple]) -> list[tuple]:
+    return [endpoint for endpoint in _schema_public(endpoints) if _schema_is_admin(endpoint[0])]
+
+
+def schema_storefront_endpoints(endpoints: list[tuple]) -> list[tuple]:
+    return [endpoint for endpoint in _schema_public(endpoints) if not _schema_is_admin(endpoint[0])]
+
+
+def _schema_groups_by_tag(result: dict) -> dict[str, set[str]]:
+    """Tag -> the groups of the modules whose operations carry it."""
+    module_group = {module: group for group, modules in SCHEMA_TAG_GROUPS.items() for module in modules}
+    groups: dict[str, set[str]] = {}
+    for path, item in result["paths"].items():
+        group = module_group.get(path.split("/")[2], _SCHEMA_UNSORTED)
+        operations = (operation for method, operation in item.items() if method in _SCHEMA_METHODS)
+        for tag in (tag for operation in operations for tag in operation.get("tags", [])):
+            groups.setdefault(tag, set()).add(group)
+    return groups
+
+
+def _schema_tag_groups(result: dict) -> dict:
+    """Declare every used tag and group it; a tag over two groups or of an unmapped module is Unsorted."""
+    tags: dict[str, list[str]] = {group: [] for group in (*SCHEMA_TAG_GROUPS, _SCHEMA_UNSORTED)}
+    for tag, groups in sorted(_schema_groups_by_tag(result).items()):
+        tags[next(iter(groups)) if len(groups) == 1 else _SCHEMA_UNSORTED].append(tag)
+    result["tags"] = [{"name": tag} for names in tags.values() for tag in names]
+    result["x-tagGroups"] = [{"name": group, "tags": names} for group, names in tags.items() if names]
+    return result
+
+
+def schema_postprocess(result: dict, generator: object, **kwargs: object) -> dict:
+    """The service's own post-processing hooks first (read at call time), then the tag groups."""
+    from django.conf import settings
+    from django.utils.module_loading import import_string
+    from drf_spectacular.settings import SPECTACULAR_DEFAULTS
+
+    hooks = settings.SPECTACULAR_SETTINGS.get("POSTPROCESSING_HOOKS", SPECTACULAR_DEFAULTS["POSTPROCESSING_HOOKS"])
+    for hook in hooks:
+        hook = import_string(hook) if isinstance(hook, str) else hook
+        result = hook(result=result, generator=generator, **kwargs)
+    return _schema_tag_groups(result)
+
+
+SCHEMA_ADMIN = {
+    "SCHEMA_PATH_PREFIX": r"/api/",
+    "PREPROCESSING_HOOKS": ["main.settings_local.schema_admin_endpoints"],
+    "POSTPROCESSING_HOOKS": ["main.settings_local.schema_postprocess"],
+    "TITLE": "Entirius Admin API",
+    "DESCRIPTION": (
+        "Admin REST API of the Entirius backend: the endpoints the admin CMS uses for catalog, content, checkout, "
+        "customers, suppliers, leads and platform settings. Admin endpoints require a staff user: get a JWT pair "
+        "from `POST /api/token/` and send `Authorization: Bearer <access>`. Guides: https://docs.entirius.com/api/"
+    ),
+}
+SCHEMA_STOREFRONT = {
+    "SCHEMA_PATH_PREFIX": r"/api/",
+    "PREPROCESSING_HOOKS": ["main.settings_local.schema_storefront_endpoints"],
+    "POSTPROCESSING_HOOKS": ["main.settings_local.schema_postprocess"],
+    "TITLE": "Entirius Storefront API",
+    "DESCRIPTION": (
+        "Storefront REST API of the Entirius backend: catalog and search, cart and checkout, content, forms, consents "
+        "and delivery points, scoped to a sales channel (`channel_idx` in the path). Authentication differs per "
+        "endpoint: each operation lists the schemes it accepts, and https://docs.entirius.com/api/authentication/ "
+        "explains them."
+    ),
+}
