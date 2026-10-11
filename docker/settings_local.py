@@ -61,6 +61,10 @@ SUPPLIER_BLOCK_PRIVATE_HOSTS = False
 # Same escape hatch for django_atlas source feeds (its own url_guard).
 ATLAS_BLOCK_PRIVATE_HOSTS = False
 
+# Storefront search forgives typos (pg_trgm). The threshold is the module default, written out.
+MATRIX_FUZZY_SEARCH = True
+MATRIX_FUZZY_SEARCH_THRESHOLD = 0.35
+
 # Lookup module (django_lookup): image embeddings from the in-network `embed` container
 # (make embed). Model/dim mirror .env — the HalfVectorField dimension must match EMBED_DIM.
 #
