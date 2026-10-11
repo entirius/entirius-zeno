@@ -101,7 +101,7 @@ services:
     volumes:
       # The selected test package (TEST_PACKAGE, make clone-tests) — seed scripts and QMS csv_path expect this path.
       # A mount is fixed when the container is created: a changed TEST_PACKAGE needs `make dev`.
-      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-emporium}:/entirius/test-package:ro
+      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-1}:/entirius/test-package:ro
       # LEADS_IMPORT_TMP_DIR: the queued CSV import written here is read by the worker
       - leads_import_tmp:/tmp/django_leads
       - ./recipes:/entirius/recipes:ro
@@ -127,8 +127,14 @@ services:
         # on the host), so it has to be the host one — the container forwards that
         # port to the service (Dockerfile.pwa CMD).
         api_base_url: http://localhost:${SERVICE_PORT:-8100}
-        channel: ${PWA_CHANNEL:-default-europe}
-        checkout_key: ${CHECKOUT_API_KEY:-entirius-docker-checkout-dev-key-2026}
+        channel: ${PWA_CHANNEL:-sloik-pl}
+        checkout_key: ${CHECKOUT_API_KEY:-sloik-checkout-sloik-pl-dev-key}
+        # Lists travel as comma-separated strings (split in Dockerfile.pwa).
+        languages: ${PWA_LANGUAGES:-pl,en}
+        default_language: ${PWA_DEFAULT_LANGUAGE:-pl}
+        currencies: ${PWA_CURRENCIES:-pln}
+        default_currency: ${PWA_DEFAULT_CURRENCY:-pln}
+        menu_url_keys: ${PWA_MENU_URL_KEYS:-nastroje,okazje,pory-roku,zestawy,chwile-z-odzysku}
     profiles: [pwa]
     ports:
       - "${PWA_PORT:-3100}:3000"
@@ -149,7 +155,7 @@ services:
     environment:
       # SPA — the browser talks to the service host port directly.
       VUE_APP_API_URL: http://localhost:${SERVICE_PORT:-8100}
-      VUE_APP_CHANNEL: ${PWA_CHANNEL:-default-europe}
+      VUE_APP_CHANNEL: ${PWA_CHANNEL:-sloik-pl}
       VUE_APP_PANELS: pages,pim,points
       VUE_APP_LANG: EN
     networks:
@@ -222,7 +228,7 @@ services:
     profiles: [service]
     command: ["python", "-m", "http.server", "8000", "--directory", "/entirius/test-package"]
     volumes:
-      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-emporium}:/entirius/test-package:ro
+      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-1}:/entirius/test-package:ro
     networks:
       - zeno
 
@@ -287,7 +293,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-emporium}:/entirius/test-package:ro
+      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-1}:/entirius/test-package:ro
       - leads_import_tmp:/tmp/django_leads
       - ./recipes:/entirius/recipes:ro
     depends_on:

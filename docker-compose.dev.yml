@@ -32,7 +32,7 @@ services:
     volumes:
       - ./docker/entrypoint-dev.sh:/entirius/docker/entrypoint-dev.sh:ro
       - ./docker/settings_local.py:/entirius/docker/settings_local.py:ro
-      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-emporium}:/entirius/test-package:ro
+      - ${TESTS_PATH:-./repos/tests}/${TEST_PACKAGE:-entirius-test-package-1}:/entirius/test-package:ro
       - ${SERVICES_PATH:-./repos/services}:/entirius/services
       - ${PY_PATH:-./repos/py}:/entirius/py
       - ${DJANGO_PATH:-./repos/django}:/entirius/django
@@ -51,6 +51,13 @@ services:
       - ${PY_PATH:-./repos/py}:/entirius/py
       - ${DJANGO_PATH:-./repos/django}:/entirius/django
       - beat_venv:/entirius/services/${SERVICE:-entirius-service-volkanos}/.venv
+
+  # make pwa-dev — the storefront image built from the committed HEAD of the local clone: its .git directory is
+  # the `local-clone` build context, cloned inside the build (Dockerfile.pwa). Never the working tree, no mount.
+  pwa:
+    build:
+      additional_contexts:
+        local-clone: ${PWA_PATH:-./repos/pwa}/entirius-pwa-storefront/.git
 
   # make cms-dev — the CMS container already runs `npm run serve`, so mounting the clone
   # over the image's GitHub checkout gives hot reload straight from repos/pwa/.
@@ -81,7 +88,7 @@ services:
       - "${CMS_S2_PORT:-8181}:8080"
     environment:
       VUE_APP_API_URL: http://localhost:${SERVICE_PORT:-8100}
-      VUE_APP_CHANNEL: ${PWA_CHANNEL:-default-europe}
+      VUE_APP_CHANNEL: ${PWA_CHANNEL:-sloik-pl}
       VUE_APP_PANELS: pages,pim,points
       VUE_APP_LANG: EN
     volumes:

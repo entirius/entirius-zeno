@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa pwa-dev cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe
 .DEFAULT_GOAL := help
 
 -include .env
@@ -17,7 +17,13 @@ EMBED_COMPOSE = $(COMPOSE_DEV) $(if $(filter 1,$(EMBED_GPU)),-f docker-compose.g
 SERVICE ?= entirius-service-volkanos
 TESTS_PATH ?= ./repos/tests
 # Directory under TESTS_PATH: the package the targets run and the containers mount (a changed value needs `make dev`).
-TEST_PACKAGE ?= entirius-test-package-emporium
+TEST_PACKAGE ?= entirius-test-package-1
+# Layers of the package a seed loads; DEMO_ONLY=1 leaves the BDD overlay out.
+ifeq ($(DEMO_ONLY),1)
+PACKAGE_LAYERS ?= demo
+else
+PACKAGE_LAYERS ?= demo,test-overlay
+endif
 DOCS_PATH ?= ./repos/docs
 DOCS_REPO = ssh://git@gitlab.lazelab.com:4227/entirius/entirius-docs.git
 WWW_PATH ?= ./repos/www
@@ -239,6 +245,15 @@ pwa:  ## Start the storefront (build from GitHub on first run)
 	$(COMPOSE) $(PROFILES) --profile pwa up -d pwa
 	@$(MAKE) --no-print-directory urls
 
+pwa-dev:  ## Start the storefront built from the committed HEAD of repos/pwa/entirius-pwa-storefront
+	@test -d $${PWA_PATH:-./repos/pwa}/entirius-pwa-storefront/.git || \
+		{ echo "ERROR: repos/pwa/entirius-pwa-storefront not cloned — run:"; \
+		  echo "  git clone https://github.com/entirius/entirius-pwa-storefront.git repos/pwa/entirius-pwa-storefront"; exit 1; }
+	@export PWA_REF=$$(git -C $${PWA_PATH:-./repos/pwa}/entirius-pwa-storefront rev-parse HEAD); \
+	$(COMPOSE_DEV) $(PROFILES) --profile pwa build $(BUILD_ARGS) pwa && \
+	$(COMPOSE_DEV) $(PROFILES) --profile pwa up -d pwa
+	@$(MAKE) --no-print-directory urls
+
 cms:  ## Start the admin CMS (build from GitHub on first run)
 	@$(call REF,entirius-pwa-cms,$${CMS_BRANCH:-develop}); \
 	export CMS_REF=$$ref; $(COMPOSE) $(PROFILES) --profile cms build $(BUILD_ARGS) cms && \
@@ -285,7 +300,7 @@ docs: clone-docs  ## Start the docs portal from repos/docs/entirius-docs (hot re
 dashboard:  ## Regenerate the Zeno Suite dashboard from the live stack
 	@python3 scripts/dashboard.py
 
-seed:  ## Seed the service with the selected test package (fixtures + full import pipeline)
+seed:  ## Seed the service with the selected test package (fixtures + full import pipeline; DEMO_ONLY=1 or PACKAGE_LAYERS=…)
 	@CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q service) \
 	DB_CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q db) \
 	SVC_DIR=/entirius/services/$(SERVICE) \
@@ -293,6 +308,7 @@ seed:  ## Seed the service with the selected test package (fixtures + full impor
 	DB_NAME=$${POSTGRES_DB:-entirius} \
 	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
 	SEED_PROFILE=$$(cat recipes/$${RECIPE:-shop}/seed-profile) \
+	PACKAGE_LAYERS=$(PACKAGE_LAYERS) \
 	bash $(TESTS_PATH)/$(TEST_PACKAGE)/scripts/seed.sh
 
 # -@spec-first: scenarios ahead of their module; -@blocked-by-module: known module gaps (registry)
