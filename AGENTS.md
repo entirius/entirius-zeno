@@ -20,7 +20,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |
 | `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
 | `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`) |
-| `make clone-tests` / `seed` / `bdd` | the selected test package (`TEST_PACKAGE` = a directory under `repos/tests/`, default `entirius-test-package-emporium`): clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`); `make e2e` follows it too |
+| `make clone-tests` / `seed` / `bdd` | the selected test package (`TEST_PACKAGE` = a directory under `repos/tests/`, default `entirius-test-package-1`, the Słoik Chwil demo): clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`); `make e2e` follows it too |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
 | `make cms-dev-s2` | second CMS dev server (:8181) from the worktree `repos/pwa/entirius-pwa-cms-s2` — dev-runner stream 2 |
@@ -93,7 +93,7 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 | Storefront behavior/UI | `entirius-pwa-storefront` |
 | Admin CMS behavior/UI | `entirius-pwa-cms` |
 | API/service behavior | the service repo (`SERVICE` in `.env`) |
-| BDD steps, fixtures, e2e, seed | `entirius-test-package-emporium` |
+| BDD steps, fixtures, e2e, seed | `entirius-test-package-1` |
 | Makefile, compose, images, docs | here |
 
 ## Gotchas

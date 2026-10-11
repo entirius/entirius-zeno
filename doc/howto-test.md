@@ -22,7 +22,7 @@ make build        # bake the service image (clones SERVICE@SERVICE_BRANCH from G
 make up           # postgres + redis + rabbitmq + service + celery worker + beat + fixtures http
 make mail         # GreenMail mail sandbox
 make frontends    # storefront + admin CMS, built from GitHub
-make seed         # Emporium demo dataset: products, prices, stock, discounts (~15-25 min)
+make seed         # Słoik Chwil demo dataset: products, prices, stock, discounts (~15-25 min)
 ```
 
 Then look around:
@@ -31,10 +31,10 @@ Then look around:
 |---|---|
 | Admin panel | http://localhost:8100/admin/ — `admin` / `admin123` |
 | Swagger UI | http://localhost:8100/api/schema/swagger-ui/ |
-| Products API | http://localhost:8100/api/matrix/v2/default-europe/products/?page_size=100 |
-| A cart with a discount | POST `/api/checkout/1/default-europe/carts/` with header `X-API-KEY: entirius-docker-checkout-dev-key-2026` |
+| Products API | http://localhost:8100/api/matrix/v2/sloik-pl/products/?page_size=100 |
+| A cart with a discount | POST `/api/checkout/1/sloik-pl/carts/` with header `X-API-KEY: sloik-checkout-sloik-pl-dev-key` |
 
-Customer endpoints (`/api/accounts/v1/default-europe/customer/me/`, profile, addresses, wishlist, the
+Customer endpoints (`/api/accounts/v1/sloik-pl/customer/me/`, profile, addresses, wishlist, the
 customer side of checkout) need `django_accounts.backends.JWTAccessBackend` in `AUTHENTICATION_BACKENDS`;
 `docker/settings_local.py` sets it. A 401 with a valid token from `customer/tokens/` means it is missing.
 
@@ -53,7 +53,7 @@ The suite is a black-box API consumer: it reads expectations from the dataset's 
 so it verifies whatever the package actually seeded — no hardcoded values.
 `make bdd` and `make e2e` run on the host and need `uv`; `make e2e` (Playwright, storefront +
 CMS) also needs its browser once:
-`cd repos/tests/entirius-test-package-emporium && uv run --extra e2e playwright install chromium`.
+`cd repos/tests/entirius-test-package-1 && uv run --extra e2e playwright install chromium`.
 
 Two tags are excluded by default (see the test repo README):
 `@spec-first` (scenarios written ahead of their module) and `@blocked-by-module`
@@ -151,7 +151,7 @@ Debugging, in this order:
 docker compose --profile infra --profile service logs worker       # rules, analysis, stage reactions
 docker compose --profile infra --profile service logs beat         # schedule loaded, tasks sent
 curl -s http://localhost:8380/api/user/sandbox/messages/INBOX       # mail that actually arrived
-curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8100/api/leads/v2/admin/default-europe/activities/?company=<id>"
+curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8100/api/leads/v2/admin/sloik-pl/activities/?company=<id>"
 ```
 
 The company timeline names the reason when a rule refuses to act (`skipped: no hooks`, `blocked: do_not_contact`).
@@ -181,10 +181,10 @@ A mail that never arrives is usually a queue nobody consumes (worker `-Q` differ
 | Image search returns text-only hits + a warning | the `embed` service is down — `make embed`; the engine degrades on purpose instead of failing |
 | Module tests fail with "cannot resolve host" | containers had no DNS; `docker-compose.dev.yml` pins `DOCKER_DNS_1/2` (default 1.1.1.1/8.8.8.8) |
 
-## What the Emporium dataset gives you
+## What the Słoik Chwil dataset gives you
 
-Two channels (`default-local` USD, `default-europe` EUR/PLN), 35 products
-(simple / configurable / bundle / custom, incl. slash-SKU edge cases), nested categories,
-attributes and PIM feature sets, prices + omnibus history, stock via QMS, 10 discount
-rules, demo suppliers with an HTTP feed, accounts groups, CMS content.
-Dataset details: `repos/tests/entirius-test-package-emporium/package/README.md`.
+Three channels (`sloik-pl` PLN, `sloik-eu` EUR, `sloik-firmy` PLN, B2B) and 214 SKUs: 212 products in
+`sloik-pl` and `sloik-eu`, 62 in `sloik-firmy`. Simple, configurable and bundle products, categories,
+attributes and PIM feature sets, prices, stock, discount rules, CMS content. `make seed SIMULATE=1` adds
+18 months of shop history. The default seed also loads the `test-overlay` layer the BDD suite needs.
+Dataset details: `repos/tests/entirius-test-package-1/package/README.md`.
