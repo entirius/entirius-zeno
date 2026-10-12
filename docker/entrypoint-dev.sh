@@ -11,8 +11,13 @@ if [ ! -f "${SERVICE_DIR}/pyproject.toml" ]; then
     exit 1
 fi
 
-# Zeno owns the per-environment config of the mounted clone
-cp -f /entirius/docker/settings_local.py "${SERVICE_DIR}/main/settings_local.py"
+# Zeno owns the per-environment config of the mounted clone. The settings read the recipes mount: a container
+# created before that mount existed keeps the settings it has until `make dev` recreates it.
+if [ -d /entirius/recipes ] || [ ! -f "${SERVICE_DIR}/main/settings_local.py" ]; then
+    cp -f /entirius/docker/settings_local.py "${SERVICE_DIR}/main/settings_local.py"
+else
+    echo "WARNING: /entirius/recipes is not mounted - settings_local.py not refreshed; run 'make dev' on the host"
+fi
 
 cd "${SERVICE_DIR}"
 uv sync --frozen

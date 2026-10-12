@@ -4,15 +4,24 @@ Zeno runs a full Entirius/Volkanos service with its infrastructure and hands you
 interface — `make`. This guide is for **verifying the platform**: seeding demo data,
 exploring the running stack, running the BDD suite.
 Developing modules or the service: [howto-develop.md](howto-develop.md).
-Command reference: [README](../README.md).
+Quick start: [README](../README.md); commands: [howto-develop.md](howto-develop.md#commands).
 
-## First run (5 commands)
+## First run
+
+```bash
+make setup        # prerequisites, test package, build, up, mail, frontends, toolbox check, seed
+```
+
+`make setup` ends with the URLs and logins. `SEED=0` stops before seeding, `DEV=1` runs the
+developer stack instead ([howto-develop.md](howto-develop.md)). The same steps by hand:
 
 ```bash
 make init         # .env + repos/ layout
 make clone-tests  # test package — bind-mounted into the stack, so clone it before `up`
 make build        # bake the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
-make up           # postgres + redis + rabbitmq + service + celery worker + fixtures http
+make up           # postgres + redis + rabbitmq + service + celery worker + beat + fixtures http
+make mail         # GreenMail mail sandbox
+make frontends    # storefront + admin CMS, built from GitHub
 make seed         # Emporium demo dataset: products, prices, stock, discounts (~15-25 min)
 ```
 
@@ -24,6 +33,10 @@ Then look around:
 | Swagger UI | http://localhost:8100/api/schema/swagger-ui/ |
 | Products API | http://localhost:8100/api/matrix/v2/default-europe/products/?page_size=100 |
 | A cart with a discount | POST `/api/checkout/1/default-europe/carts/` with header `X-API-KEY: entirius-docker-checkout-dev-key-2026` |
+
+Customer endpoints (`/api/accounts/v1/default-europe/customer/me/`, profile, addresses, wishlist, the
+customer side of checkout) need `django_accounts.backends.JWTAccessBackend` in `AUTHENTICATION_BACKENDS`;
+`docker/settings_local.py` sets it. A 401 with a valid token from `customer/tokens/` means it is missing.
 
 Customer signup (`POST /api/accounts/v1/default-europe/customer/signup/`) mails a confirmation link built from
 `NEW_ACCOUNT_REDIRECT_URL` (`docker/settings_local.py`, default the storefront's `/user-handler`); the mail lands in
@@ -42,6 +55,9 @@ make bdd TAGS=@checkout       # tag list: repos/tests/*/README.md
 
 The suite is a black-box API consumer: it reads expectations from the dataset's CSV files,
 so it verifies whatever the package actually seeded — no hardcoded values.
+`make bdd` and `make e2e` run on the host and need `uv`; `make e2e` (Playwright, storefront +
+CMS) also needs its browser once:
+`cd repos/tests/entirius-test-package-emporium && uv run --extra e2e playwright install chromium`.
 
 Two tags are excluded by default (see the test repo README):
 `@spec-first` (scenarios written ahead of their module) and `@blocked-by-module`
@@ -97,7 +113,7 @@ models.
 
 ```bash
 make mail                     # GreenMail: SMTP :3125, IMAP :3243, REST :8380 (sandbox/sandbox)
-make toolbox-check            # toolbox reachable, AI_TOOLBOX_CHANNEL sees fake models only
+make toolbox-check            # toolbox reachable, AI_TOOLBOX_CHANNEL sees fake models only (or: disabled)
 make seed                     # also purges the mailbox ("GreenMail purged." in Step 1)
 make bdd TAGS=@harness        # SMTP -> GreenMail -> REST, and an IMAP-injected reply
 ```
@@ -122,7 +138,7 @@ only. Guide with all three modes: entirius-docs `guides/leads-end-to-end-testing
 
 ```bash
 make dev                      # service, worker, beat, GreenMail
-make toolbox-check            # before seed — rules call the toolbox while the seed runs
+make toolbox-check            # before seed — with the toolbox enabled, rules call it while the seed runs
 make migrate && make seed     # SEED OK; asserts munin lists leads, communicator, siteintel, notifications
 make bdd TAGS=@funnel         # scenarios Funnel 0 … Funnel 8, one per step
 ```
@@ -148,7 +164,8 @@ Gotchas:
 
 - GreenMail is purged by seed, not by scenarios — mailbox assertions count relative to a count saved in the
   same scenario, never absolute.
-- The toolbox must be up before `make seed` — `make toolbox-check` green first; it runs outside zeno.
+- With the toolbox enabled it must be up before `make seed` — `make toolbox-check` green first; it runs outside
+  zeno. With `AI_TOOLBOX_ENABLED=0` seed and BDD run without it and skip the `@needs-toolbox` scenarios.
 
 A mail that never arrives is usually a queue nobody consumes (worker `-Q` differs between
 `docker-compose.yml` and `docker-compose.dev.yml`) or a channel without an entry in

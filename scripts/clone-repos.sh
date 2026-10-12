@@ -10,12 +10,14 @@
 #   CLONE_REF=<ref>   → any branch/tag for every repo
 # A developer can always `git switch` an individual module afterwards.
 #
+# Developer target — gh lists the org; clones are https (never prompt: private repos need
+# `gh auth setup-git`, otherwise they print FAIL).
 # Requires: gh (authenticated), git.
 #
 set -e
 
 command -v gh >/dev/null 2>&1 || {
-    echo "ERROR: gh not found - clone-repos needs it to list the org's repos."
+    echo "ERROR: gh not found - make clone-repos (developer target) needs it to list the org's repos."
     echo "Install (https://cli.github.com) and authenticate first: gh auth login"
     exit 1
 }
@@ -33,7 +35,7 @@ locked_version() {
 
 # Service first — module pinning below reads its uv.lock
 if [ ! -d "repos/services/${SERVICE}/.git" ]; then
-    git clone --quiet "git@github.com:entirius/${SERVICE}.git" "repos/services/${SERVICE}"
+    GIT_TERMINAL_PROMPT=0 git clone --quiet "https://github.com/entirius/${SERVICE}.git" "repos/services/${SERVICE}"
     echo "  clone: ${SERVICE} (service under test)"
 fi
 
@@ -59,7 +61,7 @@ echo "$repos" | sort | while read -r name; do
         continue
     fi
     mkdir -p "repos/${group}"
-    if ! git clone --quiet "git@github.com:entirius/${name}.git" "$dir"; then
+    if ! GIT_TERMINAL_PROMPT=0 git clone --quiet "https://github.com/entirius/${name}.git" "$dir"; then
         echo "  FAIL:  ${name}"
         continue
     fi

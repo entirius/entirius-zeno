@@ -438,6 +438,22 @@ scenario_gate_negation() { # a gate line `! cmd` fails the gate when cmd succeed
   teardown
 }
 
+scenario_gate_and_list() { # a failing left side of `a && b` fails the gate (set -e alone ignores it mid-block)
+  setup
+  local p=$TMP/and.md
+  printf 'STATUS: to-dev\n\n```gate\ntest -f repo/missing && true\ntrue\n```\n' > "$p"
+  assert_true "gate-and-list: a failing 'a && b' mid-block fails the gate" bash -c "! '$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\ntest -f repo/README.md && grep -q base repo/README.md\ntrue\n```\n' > "$p"
+  assert_true "gate-and-list: a passing 'a && b' passes" bash -c "'$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\nnode_free=1\nif [ "$node_free" = 1 ]; then\n  test -f repo/README.md\nfi\ntrue\n```\n' > "$p"
+  assert_true "gate-and-list: a multi-line if block still runs as one statement" bash -c "'$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\nfor f in repo/missing repo/README.md; do\n  test -f "$f"\ndone\n```\n' > "$p"
+  assert_true "gate-and-list: a failure inside a loop body still fails the gate" bash -c "! '$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  printf 'STATUS: to-dev\n\n```gate\ngrep -q base - <<EOF\nbase\nEOF\ntest -f repo/README.md \\\n  && true\n```\n' > "$p"
+  assert_true "gate-and-list: a heredoc and a backslash continuation stay whole" bash -c "'$TMP/gates/run.sh' '$p' >/dev/null 2>&1"
+  teardown
+}
+
 # Streams: plan 01 in stream 1 on the clone repos/pwa/cms, plan 02 in stream 2 on its worktree repos/pwa/cms-s2.
 streams_layout() {
   mkdir -p "$ZENO_ROOT/repos/pwa"; mv "$ZENO_ROOT/repo" "$ZENO_ROOT/repos/pwa/cms"
@@ -610,5 +626,5 @@ main() {
   (( FAIL == 0 ))
 }
 
-SCENARIOS=(green no_commit_ok red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks gate_negation streams_pick streams_parallel streams_mid_claim_plan streams_sync streams_sync_conflict accept_guards ux_profile)
+SCENARIOS=(green no_commit_ok red steer_ok triage_escalate review_critical crash flock budget timeout dry wip_header scope_violation scope_ignored push_blocked secret_leak reviewer_reprompt reviewer_silent reviewer_prose plan_tamper dirty_resume zeno_scope cr_clean cr_block cr_missing_tag cr_prose cr_inconclusive cr_reblock cr_moved_tag repos_layout resume_at_gate operator_between_ticks gate_negation gate_and_list streams_pick streams_parallel streams_mid_claim_plan streams_sync streams_sync_conflict accept_guards ux_profile)
 main "$@"

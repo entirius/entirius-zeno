@@ -93,6 +93,11 @@ no `..`/absolute `REPOS`. `STATUS:` in the plan file is authoritative; the `00-R
   (never the reviewed repo's config); gitleaks missing = no `ready`.
 - Budgets: `--max-budget-usd` per role call, `BUDGET_USD` per plan, `DAILY_CAP_USD` per day
   (`.runner/spend-<date>.log`); a role without a parsable result books its cap, never $0.
+- Checkpoint plans (`KIND: checkpoint`) get at least `CHECKPOINT_MIN_CAP_USD` (default 90): the panel reviews a whole
+  phase in diff chunks and a lower `BUDGET_USD` parks on review cost alone.
+- `PREFLIGHT_CMD` (runner `.env`, run from the zeno root, e.g. `make -s health && make -s toolbox-check`): red → the
+  tick picks but never claims, so an infrastructure outage costs no attempt and parks nothing; one desktop notice per
+  outage. Every park sends a desktop notice too (`notify-send`, best effort).
 - Watchdog: `TIMEOUT_S` per role/gate, process-group kill; `CLAUDE_CLI_PIN` mismatch → `STOP` + exit 1.
 - Reviewer without a parsable `findings.json` → one re-prompt, then `parked` (never counted as clean).
 - Untrusted text (gate.log, steer, findings) is nonce-fenced in prompts and labelled as data.
