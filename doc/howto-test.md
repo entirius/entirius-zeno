@@ -38,6 +38,10 @@ Customer endpoints (`/api/accounts/v1/default-europe/customer/me/`, profile, add
 customer side of checkout) need `django_accounts.backends.JWTAccessBackend` in `AUTHENTICATION_BACKENDS`;
 `docker/settings_local.py` sets it. A 401 with a valid token from `customer/tokens/` means it is missing.
 
+Customer signup (`POST /api/accounts/v1/default-europe/customer/signup/`) mails a confirmation link built from
+`NEW_ACCOUNT_REDIRECT_URL` (`docker/settings_local.py`, default the storefront's `/user-handler`); the mail lands in
+GreenMail (`make mail`). A 500 on signup means the setting is missing.
+
 The seed prints step timers (`[65s] Step 2: Load Fixtures`) and ends with `SEED OK in Ns` —
 if it dies it names the failed step (`SEED FAILED (exit N) during: ...`).
 
