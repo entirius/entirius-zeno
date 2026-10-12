@@ -35,4 +35,30 @@ for dir in /entirius/py/*/ /entirius/django/*/; do
 done
 echo "=== Dev mode: ${linked} local module(s) linked ==="
 
+# A module clone ahead of the service lock may need a package the lock does not carry until the next release.
+# Install only what is missing: nothing the lock pinned is upgraded.
+missing=$(.venv/bin/python - <<'PY'
+from importlib import metadata
+
+from packaging.requirements import Requirement
+
+installed = {dist.metadata["Name"].lower().replace("_", "-") for dist in metadata.distributions()}
+wanted = set()
+for dist in metadata.distributions():
+    if not dist.metadata["Name"].lower().startswith("entirius-"):
+        continue
+    for line in dist.requires or []:
+        req = Requirement(line)
+        if req.marker is not None and not req.marker.evaluate({"extra": ""}):
+            continue
+        if req.name.lower().replace("_", "-") not in installed:
+            wanted.add(f"{req.name}{req.specifier}")
+print("\n".join(sorted(wanted)))
+PY
+)
+if [ -n "${missing}" ]; then
+    echo "=== Dev mode: installing dependencies missing from the service lock: $(echo "${missing}" | tr '\n' ' ')==="
+    echo "${missing}" | xargs uv pip install --quiet
+fi
+
 exec "$@"

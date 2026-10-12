@@ -45,7 +45,9 @@ No application code lives here — compose + Makefile + Dockerfile only.
   `uv sync --frozen` into the project-dir `.venv` (standard layout).
 - `make dev`: bind-mounts `repos/` over the image; a named volume shadows the service
   `.venv` (host clone's venv untouched); the entrypoint re-syncs and editable-installs
-  every module repo found in `repos/py/` and `repos/django/`. The worker gets the same
+  every module repo found in `repos/py/` and `repos/django/`. A module clone ahead of the service lock may need a
+  package the lock lacks until the next release: the entrypoint installs what is missing and upgrades nothing the
+  lock pinned (`=== Dev mode: installing dependencies missing from the service lock` in the service log). The worker gets the same
   mounts with its own venv volume; its queue list is the recipe's `queues.txt`.
 - A recipe (`recipes/<name>/`: `apps.txt`, `queues.txt`, `seed-profile`) names the modules the stack enables
   (`LOCAL_APPS`, registry order), the queues the worker consumes and the seed profile of the test package;
