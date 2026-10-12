@@ -78,6 +78,7 @@ services:
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
       # AI toolbox runs outside zeno (its own repo on the host, or the test deployment).
+      AI_TOOLBOX_ENABLED: ${AI_TOOLBOX_ENABLED:-1}
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
@@ -93,6 +94,8 @@ services:
       OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
       # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
       ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+      # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
+      RECIPE: ${RECIPE:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -100,6 +103,7 @@ services:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
       # LEADS_IMPORT_TMP_DIR: the queued CSV import written here is read by the worker
       - leads_import_tmp:/tmp/django_leads
+      - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
         condition: service_healthy
@@ -241,8 +245,8 @@ services:
     networks:
       - zeno
 
-  # Celery worker — required by `make seed` (QMS quantities import runs as tasks).
-  # Same image as the service; in dev mode it runs the BAKED code (no hot reload).
+  # Celery worker — required by `make seed`. Same image as the service; the dev override
+  # mounts the clones into it.
   worker:
     build:
       context: .
@@ -252,8 +256,8 @@ services:
         branch: ${SERVICE_BRANCH:-master}
         ref: ${SERVICE_REF:-unknown}
     profiles: [service]
-    # Queue list is duplicated in docker-compose.dev.yml (the dev command replaces this one) — change both.
-    command: ["celery", "-A", "main", "worker", "-l", "info", "-Q", "celery,quantities,fill_product_representation,pricemanager_create_pricelist,contact_forms,contact_forms_conversions,lookup,leads_default,communicator_default,communicator_send,communicator_inbound,siteintel_default,notifications_default"]
+    # The queue list is the recipe's queues.txt, read at start.
+    command: ["sh", "-c", "exec celery -A main worker -l info -Q \"$$(sh /entirius/recipes/resolve.sh queues)\""]
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
@@ -261,6 +265,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_ENABLED: ${AI_TOOLBOX_ENABLED:-1}
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
@@ -276,11 +281,14 @@ services:
       OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
       # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
       ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+      # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
+      RECIPE: ${RECIPE:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
       - leads_import_tmp:/tmp/django_leads
+      - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
         condition: service_healthy
@@ -310,6 +318,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-entirius}:${POSTGRES_PASSWORD:-entirius-dev}@db:5432/${POSTGRES_DB:-entirius}
       EMBED_MODEL: ${EMBED_MODEL:-google/siglip-so400m-patch14-384}
       EMBED_DIM: ${EMBED_DIM:-1152}
+      AI_TOOLBOX_ENABLED: ${AI_TOOLBOX_ENABLED:-1}
       AI_TOOLBOX_BASE_URL: ${AI_TOOLBOX_BASE_URL:-http://host.docker.internal:8300}
       AI_TOOLBOX_API_KEY: ${AI_TOOLBOX_API_KEY:-}
       AI_TOOLBOX_CHANNEL: ${AI_TOOLBOX_CHANNEL:-zeno-test}
@@ -325,8 +334,12 @@ services:
       OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
       # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
       ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+      # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
+      RECIPE: ${RECIPE:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
         condition: service_healthy
@@ -349,4 +362,5 @@ volumes:
 
 networks:
   zeno:
-    name: entirius-zeno
+    # Follows the project name: a second stack (ZENO_STACK=<suffix> make init) gets its own network.
+    name: ${COMPOSE_PROJECT_NAME:-entirius-zeno}

@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt www check clean
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe
 .DEFAULT_GOAL := help
 
 -include .env
@@ -22,27 +22,37 @@ WWW_PATH ?= ./repos/www
 WWW_BRANCH ?= master
 WWW_REPO = ssh://git@gitlab.lazelab.com:4227/entirius/entirius-react-www.git
 TESTS_REPO = entirius-test-package-emporium
+ZENO_PORT_OFFSET ?= 1000
 
 help:  ## List targets
 	@grep -E '^[a-z0-9-]+:.*##' $(firstword $(MAKEFILE_LIST)) | awk -F':.*##' '{printf "  %-12s %s\n", $$1, $$2}'
 
-init:  ## Create .env from template + repos/ layout
-	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
+# ZENO_STACK=<suffix> (in a separate checkout): the .env of an isolated second stack — own project name,
+# every host port shifted by ZENO_PORT_OFFSET. Written through a temp file: a failed generation leaves no .env.
+# RECIPE=<name> is written into a newly created .env (an unknown recipe creates none); an existing .env keeps its own.
+init:  ## Create .env from template + repos/ layout (RECIPE=<name>; ZENO_STACK=s2 [ZENO_PORT_OFFSET=1000] = an isolated second stack)
+	@test -f .env || { RECIPE="$(RECIPE)" sh recipes/resolve.sh apps >/dev/null || exit 1; \
+	if [ -n "$(ZENO_STACK)" ]; then \
+		sh scripts/isolated-env.sh "$(ZENO_STACK)" "$(ZENO_PORT_OFFSET)" > .env.tmp || { rm -f .env.tmp; exit 1; }; \
+		mv .env.tmp .env && echo "Created .env for the isolated stack entirius-zeno-$(ZENO_STACK) (ports +$(ZENO_PORT_OFFSET))"; \
+	else cp .env.example .env && echo "Created .env from .env.example"; fi || exit 1; \
+	if [ -n "$(RECIPE)" ]; then echo "RECIPE=$(RECIPE)" >> .env; fi; }
 	@mkdir -p repos/py repos/django repos/services repos/tests repos/pwa repos/docs repos/www
 
-setup:  ## One command to a seeded stack: clones, dev stack, mail, CMS, toolbox check, seed (REFS=release|develop|"<branch …>" EMBED=1 SEED=0 SETUP_DRY=1)
+setup:  ## One command to a seeded baked stack: build, up, mail, frontends, toolbox check, seed (DEV=1 [REFS=… SETUP_DRY=1] EMBED=1 SEED=0)
+	@command -v python3 >/dev/null 2>&1 || { echo "make setup needs python3 (see README § Requirements)"; exit 1; }
 	@python3 scripts/setup.py
 
 clone:  ## Clone the service under test into repos/services/ (dev mode prerequisite)
 	@test -d repos/services/$(SERVICE)/.git || \
-		git clone git@github.com:entirius/$(SERVICE).git repos/services/$(SERVICE)
+		git clone https://github.com/entirius/$(SERVICE).git repos/services/$(SERVICE)
 
 clone-repos:  ## Clone ALL entirius repos into repos/ groups; modules pinned to service uv.lock versions
 	@sh scripts/clone-repos.sh $(SERVICE)
 
 clone-tests:  ## Clone the Emporium test package (data + BDD) into repos/tests/
 	@test -d $(TESTS_PATH)/$(TESTS_REPO)/.git || \
-		git clone git@github.com:entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
+		git clone https://github.com/entirius/$(TESTS_REPO).git $(TESTS_PATH)/$(TESTS_REPO)
 
 refresh-repos:  ## Update existing repos/ clones: service to SERVICE_BRANCH, modules to uv.lock tags
 	@sh scripts/refresh-repos.sh $(SERVICE)
@@ -64,9 +74,9 @@ ref=$$(GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/entirius/$(1).git 
 [ -n "$$ref" ] || { echo "cannot resolve entirius/$(1)@$(2) - missing repo, branch/tag, or not public?"; exit 1; }
 endef
 
-build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub)
+build:  ## Build the service image (clones SERVICE@SERVICE_BRANCH from GitHub; BUILD_ARGS="--no-cache --pull" for a cold build)
 	@$(call REF,$(SERVICE),$${SERVICE_BRANCH:-master}); \
-	SERVICE_REF=$$ref $(COMPOSE) $(PROFILES) build
+	SERVICE_REF=$$ref $(COMPOSE) $(PROFILES) build $(BUILD_ARGS)
 
 up:  ## Start infra + service (code baked into the image)
 	@$(call REQUIRE_IMAGE)
@@ -127,6 +137,33 @@ lookup-eval:  ## Measure lookup precision/recall on the labelled pairs of the te
 module-test:  ## Run a mounted module's tests in the service container: make module-test MODULE=entirius-django-x
 	@echo "$(MODULE)" | grep -Eq '^[A-Za-z0-9._-]+$$' || { echo "ERROR: MODULE is required (e.g. make module-test MODULE=entirius-django-lookup)"; exit 1; }
 	@$(COMPOSE) exec service sh -c 'test -d "/entirius/django/$$1" || { echo "/entirius/django/$$1 not mounted - clone it under repos/django/ and run make dev"; exit 1; }; cd "/entirius/django/$$1" && { ! grep -q "^test *=" pyproject.toml || uv pip install -q --python "$$(command -v python)" -e ".[test]"; } && python -m pytest tests -q -p no:cacheprovider' _ '$(MODULE)'
+
+# Public OpenAPI specs from the running service. The container never mounts this checkout, so the YAML comes over
+# stdout; spectacular warnings go to the .log next to it. A failed run leaves the previous spec in place.
+SCHEMA_OUT = build/openapi
+SCHEMA_DOCS ?= $(DOCS_PATH)/launch/entirius-docs-launch/public/openapi
+SCHEMA_RUN = $(COMPOSE) $(PROFILES) exec -T service python manage.py spectacular --skip-checks --custom-settings
+
+# The dev entrypoint's copy of docker/settings_local.py, repeated here; an unchanged file is not written, and a
+# container without the recipes mount (created before it existed) keeps its settings until `make dev` recreates it.
+schema-settings:
+	@mkdir -p $(SCHEMA_OUT)
+	@$(COMPOSE) $(PROFILES) exec -T service sh -c 'cat > /tmp/settings_local.py && { [ ! -d /entirius/recipes ] || cmp -s /tmp/settings_local.py main/settings_local.py || cp /tmp/settings_local.py main/settings_local.py; }' < docker/settings_local.py
+
+schema-admin: schema-settings  ## Admin OpenAPI spec into build/openapi/
+	@$(SCHEMA_RUN) main.settings_local.SCHEMA_ADMIN > $(SCHEMA_OUT)/volkanos-api-admin.yaml.tmp 2> $(SCHEMA_OUT)/volkanos-api-admin.log
+	@mv $(SCHEMA_OUT)/volkanos-api-admin.yaml.tmp $(SCHEMA_OUT)/volkanos-api-admin.yaml
+
+schema-storefront: schema-settings  ## Storefront OpenAPI spec into build/openapi/
+	@$(SCHEMA_RUN) main.settings_local.SCHEMA_STOREFRONT > $(SCHEMA_OUT)/volkanos-api-storefront.yaml.tmp 2> $(SCHEMA_OUT)/volkanos-api-storefront.log
+	@mv $(SCHEMA_OUT)/volkanos-api-storefront.yaml.tmp $(SCHEMA_OUT)/volkanos-api-storefront.yaml
+
+schema: schema-admin schema-storefront  ## Public OpenAPI specs (admin / storefront, v2 only, tag groups) from the running service
+	@echo "$(SCHEMA_OUT)/volkanos-api-admin.yaml"
+	@echo "$(SCHEMA_OUT)/volkanos-api-storefront.yaml"
+
+schema-check: schema  ## Regenerate the specs and diff them against the docs worktree (SCHEMA_DOCS); exit 1 on drift
+	@bash scripts/schema-check.sh $(SCHEMA_DOCS)
 
 down:  ## Stop everything
 	$(COMPOSE_DEV) $(ALL_PROFILES) down
@@ -197,18 +234,20 @@ smoke:  ## Boot proof: migrations, system check, admin + API over HTTP, session 
 
 pwa:  ## Start the storefront (build from GitHub on first run)
 	@$(call REF,entirius-pwa-storefront,$${PWA_BRANCH:-develop}); \
-	PWA_REF=$$ref $(COMPOSE) $(PROFILES) --profile pwa up -d --build pwa
+	export PWA_REF=$$ref; $(COMPOSE) $(PROFILES) --profile pwa build $(BUILD_ARGS) pwa && \
+	$(COMPOSE) $(PROFILES) --profile pwa up -d pwa
 	@$(MAKE) --no-print-directory urls
 
 cms:  ## Start the admin CMS (build from GitHub on first run)
 	@$(call REF,entirius-pwa-cms,$${CMS_BRANCH:-develop}); \
-	CMS_REF=$$ref $(COMPOSE) $(PROFILES) --profile cms up -d --build cms
+	export CMS_REF=$$ref; $(COMPOSE) $(PROFILES) --profile cms build $(BUILD_ARGS) cms && \
+	$(COMPOSE) $(PROFILES) --profile cms up -d cms
 	@$(MAKE) --no-print-directory urls
 
 cms-dev:  ## Start the admin CMS from repos/pwa/entirius-pwa-cms (hot reload)
 	@test -d repos/pwa/entirius-pwa-cms/.git || \
 		{ echo "ERROR: repos/pwa/entirius-pwa-cms not cloned — run:"; \
-		  echo "  git clone git@github.com:entirius/entirius-pwa-cms.git repos/pwa/entirius-pwa-cms"; exit 1; }
+		  echo "  git clone https://github.com/entirius/entirius-pwa-cms.git repos/pwa/entirius-pwa-cms"; exit 1; }
 	@$(MAKE) --no-print-directory cms COMPOSE="$(COMPOSE_DEV)"
 
 cms-dev-s2:  ## Second CMS dev server on :8181 from the worktree repos/pwa/entirius-pwa-cms-s2 (dev-runner stream 2)
@@ -219,6 +258,21 @@ cms-dev-s2:  ## Second CMS dev server on :8181 from the worktree repos/pwa/entir
 	@$(MAKE) --no-print-directory urls
 
 frontends: pwa cms  ## Start both frontends
+
+DOCS_SCREENS_REPO ?= $(DOCS_PATH)/entirius-docs
+DOCS_SCREENS_OUT ?= $(DOCS_SCREENS_REPO)/src/assets/screens
+docs-screens:  ## CMS screenshots for the docs how-tos (GUIDE=<name>; DOCS_SCREENS_REPO=<docs checkout>; needs make cms-dev)
+	@test -d repos/pwa/entirius-pwa-cms/tests/docs || \
+		{ echo "ERROR: repos/pwa/entirius-pwa-cms/tests/docs is missing — the CMS clone has no docs capture project"; exit 1; }
+	@curl -fsS --max-time 5 -o /dev/null http://localhost:$${CMS_PORT:-8180}/ || \
+		{ echo "ERROR: the CMS does not answer on :$${CMS_PORT:-8180} — run: make cms-dev"; exit 1; }
+	@mkdir -p "$(DOCS_SCREENS_OUT)"
+	@cd repos/pwa/entirius-pwa-cms && \
+	DOCS_SCREENS_OUT="$(abspath $(DOCS_SCREENS_OUT))" \
+	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
+	CMS_API_URL=http://localhost:$${SERVICE_PORT:-8100} \
+	npx playwright test -c tests/docs/playwright.docs.config.js \
+		$(if $(GUIDE),tests/docs/guides/$(GUIDE).spec.js,--grep-invert @self-test)
 
 clone-docs:  ## Clone the documentation portal (private GitLab) into repos/docs/
 	@test -d $(DOCS_PATH)/entirius-docs/.git || git clone $(DOCS_REPO) $(DOCS_PATH)/entirius-docs
@@ -237,6 +291,7 @@ seed:  ## Seed the service with the Emporium test package (fixtures + full impor
 	DB_USER=$${POSTGRES_USER:-entirius} \
 	DB_NAME=$${POSTGRES_DB:-entirius} \
 	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
+	SEED_PROFILE=$$(cat recipes/$${RECIPE:-shop}/seed-profile) \
 	bash $(TESTS_PATH)/$(TESTS_REPO)/scripts/seed.sh
 
 # -@spec-first: scenarios ahead of their module; -@blocked-by-module: known module gaps (registry)
@@ -261,13 +316,13 @@ mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and wait until it is
 toolbox-check:  ## Verify the AI toolbox answers for AI_TOOLBOX_CHANNEL and exposes only fake models
 	@sh scripts/toolbox-check.sh
 
-# The funnel test file itself ships with plan 13; phone first, then desktop.
+# The funnel test file ships with the test package; phone first, then desktop.
 e2e-funnel:  ## Run the leads funnel e2e twice: iPhone 14 emulation, then desktop
 	@$(MAKE) --no-print-directory e2e E2E_ARGS=e2e/cms/test_leads_funnel.py E2E_DEVICE="iPhone 14"
 	@$(MAKE) --no-print-directory e2e E2E_ARGS=e2e/cms/test_leads_funnel.py E2E_DEVICE=
 
-e2e-accept:  ## AI-tester acceptance run of the funnel (ux-tester role, plan 13)
-	@test -f $$HOME/.claude-runner/ux-tester/settings.json || { echo "ux-tester role not registered (plan 13)"; exit 1; }
+e2e-accept:  ## AI-tester acceptance run of the funnel (ux-tester role)
+	@test -f $$HOME/.claude-runner/ux-tester/settings.json || { echo "ux-tester role not registered (make runner-init)"; exit 1; }
 	@bash scripts/dev-runner/accept.sh
 
 # --- dev-runner (scripts/dev-runner): executes todo/<topic>/dev-plans one plan per tick ---
@@ -309,6 +364,18 @@ hotfix-status:  ## Hotfix agent: plans, releases, last log lines
 
 hotfix-stop:  ## Stop the hotfix agent after the current tick
 	@mkdir -p .runner/hotfix && touch .runner/hotfix/STOP && echo "STOP set — make hotfix-agent to start again"
+
+stranger-run:  ## Quickstart from zero on an isolated second stack, every step timed (ZENO_STACK=s2 KEEP=1 RECIPE=… TESTS_FROM=local BDD=1 OUT=…; see scripts/stranger-run.sh)
+	@bash scripts/stranger-run.sh
+
+recipe-check:  ## Validate a recipe against the service's modules.yaml (RECIPE=shop)
+	@python3 scripts/recipe-check.py $(or $(RECIPE),shop) $(or $(MODULES_YAML),repos/services/$(SERVICE)/modules.yaml)
+
+# The running container has no recipes mount until its next `make dev`, so the app list travels as an argument.
+recipe-probe:  ## Boot the recipe's app set inside the running service container, read-only (RECIPE=shop)
+	@apps=$$(RECIPE=$(or $(RECIPE),shop) sh recipes/resolve.sh apps | paste -sd, -) && [ -n "$$apps" ] && \
+	$(COMPOSE) $(PROFILES) exec -T -e PYTHONDONTWRITEBYTECODE=1 -e RECIPE=$(or $(RECIPE),shop) \
+		-w /entirius/services/$(SERVICE) service python - "$$apps" < scripts/recipe-probe.py
 
 check:  ## Verify the canonical .gitleaks.toml is linked here and in every mounted clone
 	@sh scripts/check-gitleaks-links.sh

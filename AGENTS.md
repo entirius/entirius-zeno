@@ -8,27 +8,31 @@ No application code lives here — compose + Makefile + Dockerfile only.
 
 | Command | Meaning |
 |---|---|
-| `make setup` | one command to a seeded stack: clones (`REFS=release\|develop`), dev, mail, CMS, toolbox check (missing toolbox = DEGRADED, not fatal), seed (`EMBED=1`, `SEED=0`); a feature world: `REFS="feature/x feature/y"` puts every clean clone (service and docs too) on the first listed branch it has, else develop, and starts the docs portal; `SETUP_DRY=1` only prints where each clone would land |
-| `make init` / `clone` | bootstrap `.env` + local clone of the service under test |
-| `make clone-repos` | clone all entirius repos into `repos/` groups, modules at uv.lock versions |
-| `make build` / `up` / `down` | build image, start/stop the stack (service, worker, beat) |
+| `make setup` | one command to a seeded baked stack: prerequisites, test package, build, up, mail, frontends, toolbox check (disabled = fine, enabled and broken = DEGRADED, never fatal), seed; `DEV=1` = clones + dev mounts + CMS hot reload (`REFS=release\|develop\|<feature branches>`, `SETUP_DRY=1`); `EMBED=1`, `SEED=0`; `RECIPE=<name>` on a fresh checkout picks the recipe (without `django_matrix` only the CMS is started); `--dry-run` on `scripts/setup.py` prints the steps |
+| `make init` / `clone` | bootstrap `.env` (`RECIPE=<name>` is written into a new one) + https clone of the service under test; `ZENO_STACK=s2 make init` in a separate checkout writes the `.env` of an isolated second stack (project `entirius-zeno-s2`, every host port +`ZENO_PORT_OFFSET`, default 1000) |
+| `make clone-repos` | https clones of all entirius repos into `repos/` groups, modules at uv.lock versions (`gh` lists the org) |
+| `make build` / `up` / `down` | build image (`BUILD_ARGS="--no-cache --pull"` = cold build; also on `pwa` / `cms`), start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
 | `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
 | `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |
-| `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model |
+| `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
 | `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`) |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
 | `make cms-dev-s2` | second CMS dev server (:8181) from the worktree `repos/pwa/entirius-pwa-cms-s2` — dev-runner stream 2 |
 | `make docs` / `clone-docs` | docs portal (:4421, Astro hot reload) from `repos/docs/entirius-docs` — private GitLab clone, not built from GitHub; `make docs-alt DOCS_ALT_BRANCH=x` runs a second branch on :4422 |
+| `make docs-screens` | CMS screenshots for the docs how-tos, captured from the dev CMS (English, dark, 1280 × 800) by the CMS clone's `tests/docs/` project into `DOCS_SCREENS_REPO` (a docs checkout, default `repos/docs/entirius-docs`) `src/assets/screens/<guide>/`; `GUIDE=<name>` runs one guide, `DOCS_SCREENS_OUT` overrides the folder; needs `make cms-dev`; captures write to the live database |
 | `make www WWW_BRANCH=x` | marketing site entirius.com (:3200, Next.js hot reload) from `repos/www/entirius-react-www-<branch>` — private GitLab clone |
+| `make schema` / `schema-check` | public OpenAPI specs from the running service into `build/openapi/` (admin / storefront, v2 only, tag groups); `schema-check` diffs them against the docs worktree (`SCHEMA_DOCS`), exit 1 on drift |
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
 | `make hotfix-agent` / `hotfix-status` / `hotfix-stop` | CMS hotfix agent: takes cms-blueprint issues from the internal Redmine (New/To Do, unassigned or ours), fixes them through the dev-runner on a `hotfix/<issue>` worktree (`repos/pwa/entirius-pwa-cms-hotfix`, from `origin/master`) and releases the next patch version on GitHub; max 3 releases/day, $25/issue; runbook `scripts/hotfix-agent/README.md` |
+| `make stranger-run` | the first run from zero on an isolated second stack, every step timed into one JSON: a clone of this tree in `.runner/stranger/`, no SSH, no `gh`, no `uv`, cold `make setup`, checks, cached re-run, teardown, then the service alone with `uv` (`ZENO_STACK=s2`, `ZENO_PORT_OFFSET=1000`, `STRANGER_BRANCH`, `BUILD_ARGS`, `RECIPE`, `TESTS_FROM=local` = this tree's test-package clone instead of GitHub, `BDD=1` = `make bdd` after the checks, never fatal, `KEEP=1`, `SERVICE_ONLY=0`, `OUT`, `STRANGER_DIR`); built from the service lock, so a stack without access until access ships in it |
+| `make recipe-check` / `recipe-probe` | a recipe (`RECIPE=shop`) against the service's `modules.yaml`: known apps, requirements present and in order, core modules, queues, seed profile; `recipe-probe` boots that app set inside the running service container (system check, URL conf, every module imported), read-only |
 | `make check` | guard: canonical `.gitleaks.toml` symlink present |
 | `make clean` | remove containers and volumes |
 
@@ -42,7 +46,11 @@ No application code lives here — compose + Makefile + Dockerfile only.
 - `make dev`: bind-mounts `repos/` over the image; a named volume shadows the service
   `.venv` (host clone's venv untouched); the entrypoint re-syncs and editable-installs
   every module repo found in `repos/py/` and `repos/django/`. The worker gets the same
-  mounts with its own venv volume and additionally consumes the `atlas_*` Celery queues.
+  mounts with its own venv volume; its queue list is the recipe's `queues.txt`.
+- A recipe (`recipes/<name>/`: `apps.txt`, `queues.txt`, `seed-profile`) names the modules the stack enables
+  (`LOCAL_APPS`, registry order), the queues the worker consumes and the seed profile of the test package;
+  `recipes/resolve.sh` reads it for compose, `docker/settings_local.py` and the scripts. Unset `RECIPE` = `shop`, every
+  module. Access is never in a recipe: the service enables it wherever the package is installed.
 - Host ports are shifted +100 from standard (postgres 5532, redis 6479, rabbitmq 5772,
   service 8100, embed 8097) — developers run local instances on the standard ones.
 - `repos/` is gitignored — group local clones: `py/`, `django/`, `services/`, `pwa/`
@@ -53,15 +61,16 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (fresh seed, `make mail`, toolbox up) | 1249 passed / 0 failed / 15 skipped, gate in `enforce` (after the access pre-review fixes, measured 2026-10-05; was 696 before `@access`) | ~3.5 min |
-| `make bdd TAGS=@access` (seed with the access users, after the full run) | 530 passed (`TAGS=@access-security` alone: 504); re-runnable, not one-shot (measured 2026-10-05) | ~1 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1264 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-10-10; was 696 before `@access`) | ~4 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1250 passed / 0 failed / 29 skipped (`@needs-toolbox` skipped; measured 2026-10-10) | ~3.5 min |
+| `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507 passed); re-runnable, not one-shot (re-measured 2026-10-10) | ~1 min |
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
 | `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
-| `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.31 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-08-25 over three fresh seeds — every metric above, the image leg included, came back identical on all three) | ~1 min |
+| `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.47 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-10-10 on one fresh seed) | ~1 min |
 
 Suppliers-admin, atlas push, atlas merge, `@lookup-oneshot`, `@leads-oneshot` (incl. `@funnel`), `@communicator-oneshot`
 and `@toolbox-oneshot` (`@toolbox-down`) scenarios are one-shot per database —
@@ -89,6 +98,12 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 
 ## Gotchas
 
+- A recipe is chosen at `make init` and lives in `.env`; measure recipes on an isolated stack
+  (`make stranger-run RECIPE=…`), never by switching the main stack.
+- The service, worker and beat containers read `recipes/` through a mount: after pulling a tree that adds it, a
+  container created before needs `make dev` (a restart keeps the old mounts and fails on the missing recipe).
+- An isolated stack is a separate checkout: `ZENO_STACK=s2 make init` there, never a second `.env` here. A checkout
+  without its own `.env` resolves to the main project name — `make down` / `clean` there would hit the main stack.
 - Scripted `docker compose` here MUST pass profiles — without them `ps -q` resolves
   nothing (services depend on `db` from the `infra` profile).
 - `make clone-tests` before `make up` — the test-package checkout is bind-mounted into
@@ -111,10 +126,9 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   `docker/settings_local.py`); the switch lives in Redis and expires after 15 min — a stack whose AI calls all fail
   with `ToolboxConnectionError` while the toolbox is up has the switch on. Beat retries transiently failed drafts and
   intel analyses every 10 min once the toolbox answers.
-- The toolbox must be up before seed: `make toolbox-check` green first — it runs outside zeno (its own repo,
+- With the toolbox enabled it must be up before seed (`make toolbox-check` green); with `AI_TOOLBOX_ENABLED=0` seed
+  and BDD run without it and skip `@needs-toolbox`. It runs outside zeno (its own repo,
   `runserver 0.0.0.0:8300`), containers reach it as `host.docker.internal`.
-- Worker `-Q` lives in both compose files — the dev command replaces the baked one; a queue added to one file
-  only makes its tasks queue forever in the other mode.
 - Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
   create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc
   collation: run `REINDEX DATABASE entirius` once after the switch).
@@ -128,7 +142,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   vectors left the search resolving ties by traversal order, so the image leg looked random. With
   real vectors it is deterministic — three fresh seeds returned the same number.
   `manage.py lookup_doctor` is the handshake that catches it.
-- The access gate (`django_access`) is on in `enforce`; the mode comes from `.env` `ACCESS_GATE_MODE` (`enforce` |
+- The access gate runs in dev mode until access ships in the service lock (the baked stack has no gate, no role
+  users, no `@access` scenarios). In dev mode `django_access` is on in `enforce`; the mode comes from `.env` `ACCESS_GATE_MODE` (`enforce` |
   `observe` | `off`) through compose — a changed value needs `make dev` (a restart keeps the old env). Staff see it
   as `gate_mode` in `GET api/access/v2/me/`.
 - Seed creates the staff role users `viewer`, `editor`, `manager`, `accessadmin` (Administrator) and `norole` (staff,
@@ -138,6 +153,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
 - `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
   service default is staff-only. `DRF_NUM_PROXIES = 0` there (no proxy, `REMOTE_ADDR` only); unset fails `check --deploy` with `volkanos.E001`.
+- `make schema` refreshes `main/settings_local.py` in the service container when `docker/settings_local.py` changed;
+  spectacular warnings are in `build/openapi/*.log`.
 - Ten wrong passwords for one user on `api/token/` block that user from that address for 15 minutes — a probe
   with a stale password locks `admin` out of the CMS and BDD too.
 - `make embed` GPU variant needs the GPU visible to Docker via CDI (`/etc/cdi/nvidia.yaml`,

@@ -1,8 +1,11 @@
 #!/bin/sh
 # toolbox-check.sh — the AI toolbox zeno points at must answer for the test channel and expose
 # ONLY `fake` models: a real model visible to that channel means BDD spends real money.
-# Reads AI_TOOLBOX_* from .env (plain values); host.docker.internal is the containers' name for
-# the host, so it becomes localhost here.
+# Every AI_TOOLBOX_* value comes from the environment first, then .env (plain values), then the default;
+# host.docker.internal is the containers' name for the host, so it becomes localhost here.
+# AI_TOOLBOX_ENABLED = 0 / false / no / off (any case): one line "toolbox-check: disabled …", exit 0 —
+# the toolbox is switched off on purpose and nothing is probed. Enabled: exit 1 on an empty key, on an
+# HTTP answer other than 200 and on any model that is not `fake`.
 set -eu
 
 env_value() { # key → value from .env (last assignment wins), empty when absent
@@ -10,11 +13,23 @@ env_value() { # key → value from .env (last assignment wins), empty when absen
   sed -n "s/^$1=//p" .env | tail -1
 }
 
-base=$(env_value AI_TOOLBOX_BASE_URL)
-key=$(env_value AI_TOOLBOX_API_KEY)
-channel=$(env_value AI_TOOLBOX_CHANNEL)
-base=$(printf '%s' "${base:-http://host.docker.internal:8300}" | sed 's#host\.docker\.internal#localhost#')
-channel=${channel:-zeno-test}
+setting() { # key, default → environment, then .env, then the default
+  value=$(printenv "$1" || true)
+  [ -n "$value" ] || value=$(env_value "$1")
+  printf '%s' "${value:-$2}"
+}
+
+enabled=$(setting AI_TOOLBOX_ENABLED 1)
+case $(printf '%s' "$enabled" | tr '[:upper:]' '[:lower:]') in
+  0 | false | no | off)
+    echo "toolbox-check: disabled (AI_TOOLBOX_ENABLED=$enabled) — AI features are switched off on purpose"
+    exit 0
+    ;;
+esac
+
+base=$(setting AI_TOOLBOX_BASE_URL http://host.docker.internal:8300 | sed 's#host\.docker\.internal#localhost#')
+key=$(setting AI_TOOLBOX_API_KEY "")
+channel=$(setting AI_TOOLBOX_CHANNEL zeno-test)
 [ -n "$key" ] || { echo "toolbox-check: AI_TOOLBOX_API_KEY is empty in .env"; exit 1; }
 
 url="$base/api/ai-completion/v2/admin/$channel/models/"
