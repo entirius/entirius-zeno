@@ -1,7 +1,12 @@
 # syntax=docker/dockerfile:1
-# Storefront (Next.js 16 App Router, pnpm) — built from GitHub. The app reads no env:
+# Storefront (Next.js 16 App Router, pnpm) — built from GitHub, or from the local clone
+# (make pwa-dev). The app reads no env:
 # its whole config is the gitignored _CONFIG/ directory of JSON files, imported
 # statically and therefore baked into the build. zeno writes them here.
+# Empty unless `make pwa-dev` replaces it with the .git directory of the local clone
+# (additional build context of the same name, docker-compose.dev.yml).
+FROM scratch AS local-clone
+
 FROM node:22-slim
 
 ARG repo=entirius-pwa-storefront
@@ -16,28 +21,45 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 
 # Cache-bust: `ref` carries the remote branch SHA (resolved by the Makefile via
 # git ls-remote) — an ADD of the GitHub API ref proved unreliable (silent cache reuse).
+# With a local clone in the context its committed HEAD is built instead of the GitHub branch.
 ARG ref=unknown
-RUN echo "building ${repo}@${branch} (${ref})" \
-    && git clone -b ${branch} --depth 1 https://github.com/entirius/${repo}.git ${APP_DIR}
+RUN --mount=type=bind,from=local-clone,target=/local-clone.git \
+    if [ -e /local-clone.git/HEAD ]; then \
+        echo "building ${repo}@local HEAD (${ref})" \
+        && git -c safe.directory=/local-clone.git clone --depth 1 file:///local-clone.git ${APP_DIR}; \
+    else \
+        echo "building ${repo}@${branch} (${ref})" \
+        && git clone -b ${branch} --depth 1 https://github.com/entirius/${repo}.git ${APP_DIR}; \
+    fi
 
 WORKDIR ${APP_DIR}
 
 # _CONFIG/ from the committed template, then zeno's values written in: the API URL
 # and one channel (the same one the CMS edits), which also becomes the default of
-# the `default` country — routing lives under app/[customer_country].
+# the `default` country — routing lives under app/[customer_country]. Languages,
+# currencies and the menu's root categories (url_keys) arrive as comma-separated lists.
 ARG api_base_url=http://localhost:8100
-ARG channel=default-europe
-ARG checkout_key=entirius-docker-checkout-dev-key-2026
+ARG channel=sloik-pl
+ARG checkout_key=sloik-checkout-sloik-pl-dev-key
+ARG languages=pl,en
+ARG default_language=pl
+ARG currencies=pln
+ARG default_currency=pln
+ARG menu_url_keys=nastroje,okazje,pory-roku,zestawy,chwile-z-odzysku
 ENV API_BASE_URL=${api_base_url}
 RUN cp -r _CONFIG.example _CONFIG && node -e "\
 const fs = require('fs'); \
 const rw = (f, fn) => { const p = '_CONFIG/' + f; \
   fs.writeFileSync(p, JSON.stringify(fn(JSON.parse(fs.readFileSync(p))), null, 2)); }; \
-rw('app.config.json', c => ({ ...c, API_BASE_URL: '${api_base_url}' })); \
+const list = s => s.split(',').map(x => x.trim()).filter(Boolean); \
+rw('app.config.json', c => ({ ...c, API_BASE_URL: '${api_base_url}', MENU_CINFGURATION: \
+  { ...c.MENU_CINFGURATION, CONFIG_QUERY: { url_key: list('${menu_url_keys}') } } })); \
 rw('channels.config.json', () => ({ '${channel}': \
   { CHANNEL_LABEL: '${channel}', API_CHECKOUT_KEY: '${checkout_key}' } })); \
 rw('countries.config.json', c => ({ default: \
-  { ...c.default, channels: ['${channel}'], default_channel: '${channel}' } })); \
+  { ...c.default, languages: list('${languages}'), default_language: '${default_language}', \
+    currencies: list('${currencies}'), default_currency: '${default_currency}', \
+    channels: ['${channel}'], default_channel: '${channel}' } })); \
 "
 
 RUN corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build

@@ -149,8 +149,8 @@ entirius-zeno/
 | `make dashboard` | Regenerate the Zeno Suite dashboard (live stack: ports, editable vs baked packages) |
 | `make pwa` / `make cms` / `make frontends` | Start the storefront, the admin CMS, or both (built from GitHub) |
 | `make mail` | Start the GreenMail mail sandbox and wait until it is ready |
-| `make clone-tests` | Clone the Emporium test package (data + BDD) into `repos/tests/` |
-| `make seed` | Seed the service with the Emporium test package (fixtures + import pipeline) |
+| `make clone-tests` | Clone the selected test package (`TEST_PACKAGE`, default `entirius-test-package-1`: data + BDD) into `repos/tests/` |
+| `make seed` | Seed the service with the test package, the Słoik Chwil demo (fixtures + import pipeline) |
 | `make bdd` | Run the BDD suite against the running service (`TAGS=@tag` optional) |
 | `make e2e` | Run Playwright e2e (storefront + CMS) against the running frontends |
 | `make clean` | Remove containers and volumes |
@@ -164,7 +164,7 @@ entirius-zeno/
 | `SERVICE_PORT` | `8100` | Host port for the service |
 | `POSTGRES_*`, `REDIS_PORT`, `RABBITMQ_*` | dev defaults, ports +100 | Infrastructure credentials and host ports |
 | `PWA_PORT` / `CMS_PORT` / `DASHBOARD_PORT` | `3100` / `8180` / `8200` | Host ports for storefront, CMS, Zeno Suite |
-| `PWA_CHANNEL` | `default-europe` | Channel the storefront serves and the CMS edits (Emporium seeds it) |
+| `PWA_CHANNEL` | `sloik-pl` | Channel the storefront serves and the CMS edits (the seed creates it) |
 
 Compose passes `DATABASE_URL` pointing at the `db` container, so the whole stack
 (including the test suite) runs against PostgreSQL. Dev credentials: PostgreSQL

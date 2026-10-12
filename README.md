@@ -9,7 +9,7 @@ from the platform repositories on GitHub.
 - Builds the backend, the storefront and the admin CMS from their GitHub repositories over https: no SSH key, no `gh`.
 - Starts the backend with PostgreSQL, Redis, RabbitMQ, a Celery worker and beat, and a mail sandbox that catches
   every mail the stack sends.
-- Seeds a demo shop from the Emporium test package and runs its BDD and Playwright suites against the live stack.
+- Seeds the Słoik Chwil demo shop from the test package `entirius-test-package-1` and runs its BDD and Playwright suites against the live stack.
 - Runs a developer stack that mounts local clones of the service and its modules, with hot reload.
 - Prints the URL and port of every running service, read from the live containers.
 
@@ -72,7 +72,7 @@ the service lock.
 
 The harness runs the backend service with the test package's demo data, and the two frontends next to it:
 [entirius-service-volkanos](https://github.com/entirius/entirius-service-volkanos) ·
-[entirius-test-package-emporium](https://github.com/entirius/entirius-test-package-emporium) ·
+`entirius-test-package-1` (not public yet) ·
 [entirius-pwa-cms](https://github.com/entirius/entirius-pwa-cms) ·
 [entirius-pwa-storefront](https://github.com/entirius/entirius-pwa-storefront)
 
