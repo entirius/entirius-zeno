@@ -75,6 +75,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1250 passed / 0 failed / 29 skipped (measured 2026-10-13) | 16 min |
 | `make stranger-run RECIPE=catalog TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 832 passed / 0 failed / 447 skipped (measured 2026-10-13) | 6 min |
 | `make stranger-run RECIPE=pim TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront not started · BDD 696 passed / 0 failed / 583 skipped (measured 2026-10-13) | 6 min |
+| `make stranger-run RECIPE=website TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront not started · BDD 727 passed / 0 failed / 552 skipped (measured 2026-10-13) | 4 min |
 | `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.47 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-10-10 on one fresh seed) | ~1 min |
 
 Suppliers-admin, atlas push, atlas merge, `@lookup-oneshot`, `@leads-oneshot` (incl. `@funnel`), `@communicator-oneshot`
