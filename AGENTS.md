@@ -72,6 +72,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
 | `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
+| `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1241 passed / 9 failed / 29 skipped (measured 2026-10-13; the read model held 31 of 35 products in this run, the 9 failures follow from it) | 15 min |
+| `make stranger-run RECIPE=catalog TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 832 passed / 0 failed / 447 skipped (measured 2026-10-13) | 6 min |
 | `make lookup-eval` (fresh seed, embed up) | 240 pairs (positives = match) · P/R @45 = 0.74/0.98 · @75 = 1.00/0.47 · auto-linked true pairs 38/59, wrongly auto-linked 0 · recall@50 name-leg 0.99 · recall@20 image-leg 0.63 (SigLIP so400m; measured 2026-10-10 on one fresh seed) | ~1 min |
 
 Suppliers-admin, atlas push, atlas merge, `@lookup-oneshot`, `@leads-oneshot` (incl. `@funnel`), `@communicator-oneshot`
