@@ -1,0 +1,14 @@
+# Content website with your own frontend: pages, blog, navigation, FAQ, forms and consents in the CMS; no storefront.
+django_regional  # core: countries, currencies and languages
+django_utils  # core: base models and API helpers
+django_utils.toolbox  # core: the AI toolbox client of utils, reported by the module registry
+django_pim  # required by the content module; no products are imported, PIM CSV is not in the recipe
+django_faq  # questions and answers
+django_munin  # core: module registry and health, the CMS switches panels from it
+django_captcha  # bot check on the account sign-up
+django_agreements  # consents, cookie banner and legal pages
+django_email  # required by accounts
+django_contact_forms  # enquiry and booking forms
+django_contentdb  # pages, blog and navigation
+django_accounts  # CMS login
+django_sitemap  # sitemap from content, FAQ and catalog
