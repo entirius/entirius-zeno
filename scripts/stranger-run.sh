@@ -272,6 +272,7 @@ git_version() { # versions key, git command prefix… → branch and short commi
 do_versions() { # what the run actually built: the clones baked into the images, the test package, image sizes
   local pair size
   for pair in service:service cms:cms storefront:pwa; do
+    if [[ $pair == storefront:* ]] && ! has_matrix; then continue; fi # no read model, no storefront container
     git_version "${pair%%:*}" in_checkout docker compose "${PROFILES[@]}" exec -T "${pair##*:}" git
     size=$(docker image ls --format '{{.Size}}' "$PROJECT-${pair##*:}" | head -1)
     fact "versions.images.${pair%%:*}" "$size"
