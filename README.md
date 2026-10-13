@@ -50,8 +50,8 @@ Options, combinable:
 The AI toolbox runs outside the harness and is switched off by default (`AI_TOOLBOX_ENABLED=0` in `.env.example`):
 `make setup` reports it as disabled, AI drafts and translations are refused, and `make bdd` skips the scenarios
 tagged `@needs-toolbox`. With the toolbox enabled but not answering, `make setup` reports DEGRADED mode and seeds
-anyway. The access gate runs in dev mode until access ships in
-the service lock.
+anyway. The access gate runs in the baked stack and in dev mode:
+access ships in the service lock since service 4.0.0.
 
 ## Requirements
 
