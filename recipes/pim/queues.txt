@@ -1,0 +1,11 @@
+celery
+pricemanager_create_pricelist
+atlas_default
+atlas_images
+atlas_results
+lookup
+quantities
+enrichment
+supplier_default
+supplier_images
+supplier_results

@@ -17,7 +17,7 @@ load_env() {
   : "${STOP_FILE:=$RUNNER_DIR/STOP}" "${GATES_DIR:=$RUNNER_DIR/gates}"
   : "${BASE_BRANCH:=develop}" "${MAX_ATTEMPTS:=3}" "${MAX_REVIEW_ROUNDS:=1}"
   : "${CODER_CAP_USD:=15}" "${REVIEWER_CAP_USD:=3}" "${TRIAGE_CAP_USD:=1}" "${UX_CAP_USD:=8}" "${DAILY_CAP_USD:=60}"
-  : "${ROLE_TIMEOUT:=3600}" "${SENTINEL_GRACE:=90}" "${POLL_STEP:=2}"
+  : "${ROLE_TIMEOUT:=3600}" "${SENTINEL_GRACE:=90}" "${POLL_STEP:=2}" "${CHECKPOINT_MIN_CAP_USD:=90}"
   : "${MOCK_ROLES:=0}" "${DRY:=0}" "${PROFILES_DIR:=$HOME/.claude-runner}"
   : "${CODER_MODEL:=claude-opus-5}" "${REVIEWER_MODEL:=claude-fable-5}" "${TRIAGE_MODEL:=claude-fable-5}" "${UX_MODEL:=claude-opus-5}"
   : "${CODER_EFFORT:=}" "${REVIEWER_EFFORT:=}" "${TRIAGE_EFFORT:=}" "${UX_EFFORT:=}"
@@ -28,6 +28,19 @@ load_env() {
 }
 
 acquire_lock() { exec 9>"$LOCK_FILE"; flock -n 9; }
+
+# Desktop notice for the operator; best effort (no display, no notify-send → silent).
+notify() { [[ $MOCK_ROLES == 1 ]] || notify-send -a dev-runner "$1" "$2" 2>/dev/null || true; }
+
+# Operator health gate (runner .env PREFLIGHT_CMD, run from the zeno root — e.g. the stack and the AI toolbox): red →
+# no claim this tick, so an infrastructure outage never burns an attempt or parks a plan. One notice per outage.
+preflight_ok() {
+  [[ -n ${PREFLIGHT_CMD:-} ]] || return 0
+  local flag=$STATE_DIR/preflight-red
+  if (cd "$ZENO_ROOT" && bash -c "$PREFLIGHT_CMD") >/dev/null 2>&1; then rm -f "$flag"; return 0; fi
+  [[ -f $flag ]] || { : > "$flag"; notify "dev-runner: preflight red" "$PREFLIGHT_CMD"; }
+  return 1
+}
 
 # Every mutation goes through mutate() — --dry-run only logs.
 mutate() { if [[ $DRY == 1 ]]; then log "DRY-RUN: $*"; else "$@"; fi; }
@@ -353,7 +366,7 @@ remove_push_guard() { # repo-dir
   return 0
 }
 
-# SCOPE_IGNORE (runner .env, space-separated paths relative to the zeno root) drops clones the operator is
+# SCOPE_IGNORE (runner .env, space-separated paths relative to the zeno root; `.` = the root) drops clones the operator is
 # working in by hand from the watch list; the REPOS of other streams' plans are dropped the same way (another
 # loop writes there). A clone in the plan's own REPOS is always watched.
 other_stream_dirs() {
@@ -368,7 +381,7 @@ all_repo_dirs() { # every git repo the runner watches: repos/*/* + zeno root + t
   { local d r i others; others=$(other_stream_dirs | sort -u)
     for d in "$ZENO_ROOT"/repos/*/*/ "$ZENO_ROOT/"; do
       [[ -e $d/.git ]] || continue
-      for i in ${SCOPE_IGNORE:-}; do [[ ${d%/} == "$ZENO_ROOT/${i%/}" ]] && continue 2; done
+      for i in ${SCOPE_IGNORE:-}; do i=${i%/}; [[ $i == . ]] && i=; [[ ${d%/} == "$ZENO_ROOT${i:+/$i}" ]] && continue 2; done
       grep -qxF "${d%/}" <<<"$others" && continue
       echo "${d%/}"
     done

@@ -1,0 +1,14 @@
+# Product catalog with content and a storefront to browse it; no prices, stock, cart or checkout.
+django_regional  # core: countries, currencies and languages
+django_utils  # core: base models and API helpers
+django_utils.toolbox  # core: the AI toolbox client of utils, reported by the module registry
+django_pim  # the product catalog
+django_pim_csv  # CSV import of the catalog
+django_munin  # core: module registry and health, the CMS switches panels from it
+django_captcha  # bot check on customer sign-up
+django_agreements  # consents and legal pages
+django_email  # required by accounts
+django_contact_forms  # enquiry forms
+django_contentdb  # pages, blog and navigation
+django_accounts  # CMS login and customer accounts
+django_matrix  # the storefront read model
