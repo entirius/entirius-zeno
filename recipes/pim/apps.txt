@@ -1,0 +1,17 @@
+# Product information back office: catalog, prices, stock, suppliers and pricing intelligence in the CMS; no storefront, no checkout.
+django_regional  # core: countries, currencies and languages
+django_utils  # core: base models and API helpers
+django_utils.toolbox  # core: the AI toolbox client of utils, reported by the module registry
+django_pim  # the product catalog
+django_pricemanager  # price lists
+django_atlas  # supplier catalogs: source feeds and matching to your products
+django_pricefighter  # competitive pricing decisions
+django_lookup  # duplicate detection; text search, image search needs the embedding service
+django_pim_csv  # CSV import of the catalog
+django_munin  # core: module registry and health, the CMS switches panels from it
+django_captcha  # bot check on the account sign-up
+django_qms  # stock
+django_email  # required by accounts
+django_enrichment  # reviewable change proposals
+django_accounts  # CMS login
+django_suppliers  # supplier feeds into the catalog and stock
