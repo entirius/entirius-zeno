@@ -96,6 +96,10 @@ if _enabled("django_lookup", "django_pim"):
 ENRICHMENT_ADAPTERS: dict[str, str] = {}
 if _enabled("django_enrichment", "django_atlas"):
     ENRICHMENT_ADAPTERS["atlas"] = "django_atlas.services.enrichment_adapter"
+if _enabled("django_enrichment", "django_pim"):
+    ENRICHMENT_ADAPTERS["pim"] = "django_pim.services.enrichment_adapter"
+if _enabled("django_enrichment", "django_contentdb"):
+    ENRICHMENT_ADAPTERS["contentdb"] = "django_contentdb.services.enrichment_adapter"
 
 # Leads platform — mail goes to the in-network GreenMail sandbox (make mail), never out.
 # django_email resolves SMTP per channel; the global EMAIL_HOST is the fallback for every sender except

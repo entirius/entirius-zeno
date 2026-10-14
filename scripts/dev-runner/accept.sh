@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# make e2e-accept — mode C of the leads funnel: one ux-tester session walks the CMS on phone and desktop and
+# make e2e-accept [ACCEPT=<scenario>] — one ux-tester session walks the CMS on phone and desktop (scenario prompt
+# prompts/accept/<scenario>.md, default leads-funnel; only leads-funnel seeds a review draft first) and
 # writes .runner/accept/<ts>/report.md + screenshots. Plan-free: no pick_plan, no commits; books its cost only.
 # Guards like the runner: STOP file, CLI pin and daily cap before any paid session; no draft = no session.
 # Confinement: the profile deny rules (init.sh) are best-effort patterns; the guarantee is the scope check —
@@ -17,6 +18,8 @@ PLANS_DIR=${PLANS_DIR:-todo/leads-platform/dev-plans} load_env
 API=http://localhost:$(sed -n 's/^SERVICE_PORT=//p' "$ZENO_ROOT/.env" 2>/dev/null | tail -1 | grep . || echo 8100)
 CHANNEL=default-europe
 ACCEPT_DOMAIN=example-shop-5.test
+ACCEPT=${ACCEPT:-leads-funnel}
+ACCEPT_PROMPT=$RUNNER_DIR/prompts/accept/$ACCEPT.md
 
 env_value() { # key default → value from the zeno .env (never sourced: it is not ours to execute)
   local v; v=$(sed -n "s/^$1=//p" "$ZENO_ROOT/.env" 2>/dev/null | tail -1)
@@ -47,8 +50,8 @@ setup_draft() { # → company name; one review_required draft on the seeded funn
 
 build_accept_prompt() { # run-dir company → stdout
   cat "$RUNNER_DIR/roles/ux-tester.md"
-  printf '\n'; cat "$RUNNER_DIR/prompts/accept/leads-funnel.md"
-  printf '\n---\n## Run context\n- Run directory (report + screenshots): %s\n- Zeno root: %s\n- Setup company: %s\n' "$1" "$ZENO_ROOT" "$2"
+  printf '\n'; cat "$ACCEPT_PROMPT"
+  printf '\n---\n## Run context\n- Scenario: %s\n- Run directory (report + screenshots): %s\n- Zeno root: %s\n- Setup: %s\n' "$ACCEPT" "$1" "$ZENO_ROOT" "$2"
   printf -- '- CMS login: %s / %s\n' "$(env_value ADMIN_USERNAME admin)" "$(env_value ADMIN_PASSWORD admin123)"
   untrusted "URLs (make urls)" "$(make -s -C "$ZENO_ROOT" urls 2>&1)"
   # shellcheck disable=SC2016
@@ -81,10 +84,11 @@ scope_changes() { # snapshot-file → 0 clean; 1 + changed lines on stdout
 
 main() {
   local dir company changes rc=0
+  [[ $ACCEPT =~ ^[a-z0-9-]+$ && -f $ACCEPT_PROMPT ]] || die "unknown acceptance scenario: $ACCEPT (no $ACCEPT_PROMPT)"
   guards_ok || exit 1
   dir=$STATE_DIR/accept/$(date +%Y%m%d-%H%M%S)
   mkdir -p "$dir" "$(role_workdir ux-tester)"
-  company=$(setup_draft)
+  if [[ $ACCEPT == leads-funnel ]]; then company=$(setup_draft); else company="none (scenario data comes from the seed)"; fi
   build_accept_prompt "$dir" "$company" > "$dir/ux-tester-prompt.md"
   scope_snapshot > "$dir/scope-base.txt"
   run_confined "$dir" || rc=$?
