@@ -189,10 +189,16 @@ CELERY_BEAT_SCHEDULE = {
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
+    # Work queue: expired leases back to the queue, stalled work escalated, consumers restarted after a crash.
+    "enrichment-reap": {"task": "enrichment.reap", "schedule": 60},
 }
-# An entry stays only when the app of its task (`django_<x>.…`) is enabled.
+# An entry stays only when the app of its task is enabled. Most task names are `django_<x>.…`; the enrichment
+# tasks are `enrichment.…`, so the prefixes that differ from their app are mapped explicitly.
+_BEAT_TASK_APPS = {"enrichment": "django_enrichment"}
 CELERY_BEAT_SCHEDULE = {
-    name: entry for name, entry in CELERY_BEAT_SCHEDULE.items() if _enabled(entry["task"].split(".")[0])
+    name: entry
+    for name, entry in CELERY_BEAT_SCHEDULE.items()
+    if _enabled(_BEAT_TASK_APPS.get(prefix := entry["task"].split(".")[0], prefix))
 }
 
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
