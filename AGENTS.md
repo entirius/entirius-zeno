@@ -48,8 +48,11 @@ No application code lives here — compose + Makefile + Dockerfile only.
   every module repo found in `repos/py/` and `repos/django/`. A module clone ahead of the service lock may need a
   package the lock lacks until the next release: the entrypoint installs what is missing and upgrades nothing the
   lock pinned (`=== Dev mode: installing dependencies missing from the service lock` in the service log). The worker gets the same
-  mounts with its own venv volume; its queue list is the recipe's `queues.txt`.
-- A recipe (`recipes/<name>/`: `apps.txt`, `queues.txt`, `seed-profile`) names the modules the stack enables
+  mounts with its own venv volume; its queue list is the recipe's `queues.txt`. A second worker, `worker-bulk`
+  (`-c 1`, own venv volume), consumes the recipe's `bulk-queues.txt` (`enrichment_bulk`: enrichment "Add to queue"
+  runs), so a bulk run never blocks a single click on the main worker's `enrichment_interactive`; a recipe without
+  `bulk-queues.txt` leaves it exited (0).
+- A recipe (`recipes/<name>/`: `apps.txt`, `queues.txt`, optional `bulk-queues.txt`, `seed-profile`) names the modules the stack enables
   (`LOCAL_APPS`, registry order), the queues the worker consumes and the seed profile of the test package;
   `recipes/resolve.sh` reads it for compose, `docker/settings_local.py` and the scripts. Unset `RECIPE` = `shop`, every
   module. Access is never in a recipe: the service enables it wherever the package is installed.
@@ -116,8 +119,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   three containers.
 - Edit `docker/settings_local.py`, never `main/settings_local.py` in the clone — the
   entrypoint overwrites it on every dev start.
-- The dev-mode worker runs your mounts, but Celery has no autoreload — restart the
-  worker after module changes that affect tasks.
+- The dev-mode workers run your mounts, but Celery has no autoreload — restart `worker` and
+  `worker-bulk` after module changes that affect tasks.
 - Feed URLs pointing at the `fixtures` container need the SSRF escape hatches in
   `docker/settings_local.py` (`SUPPLIER_BLOCK_PRIVATE_HOSTS` / `ATLAS_BLOCK_PRIVATE_HOSTS`).
 - Standalone re-runs of `seed-atlas-e2e.py` wipe the pricefighter-calibrated

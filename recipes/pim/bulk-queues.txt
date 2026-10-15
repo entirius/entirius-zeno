@@ -1,0 +1,2 @@
+# The bulk worker (worker-bulk, concurrency 1): long runs that must never block a single click.
+enrichment_bulk
