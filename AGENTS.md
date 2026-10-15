@@ -74,6 +74,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
 | `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
+| `make e2e E2E_ARGS="e2e/cms/ -k ai_studio"` (`make cms-dev`, `CMS_BASE_URL=http://localhost:8080` to the test-package make, fake toolbox) | 33 passed (measured 2026-10-15, twice) | ~6 min |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
 | `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1250 passed / 0 failed / 29 skipped (measured 2026-10-13) | 16 min |
 | `make stranger-run RECIPE=catalog TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 832 passed / 0 failed / 447 skipped (measured 2026-10-13) | 6 min |
@@ -138,6 +139,13 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - With the toolbox enabled it must be up before seed (`make toolbox-check` green); with `AI_TOOLBOX_ENABLED=0` seed
   and BDD run without it and skip `@needs-toolbox`. It runs outside zeno (its own repo,
   `runserver 0.0.0.0:8300`), containers reach it as `host.docker.internal`.
+- Enrichment runs go through a work queue: a run is planned into units (`enrichment.plan_task`), workers claim them
+  with a lease (`enrichment.consume`), and beat runs `enrichment.reap` every minute (expired leases back to the queue,
+  stale-queue and failure alerts). A run spawned while `worker` / `worker-bulk` are down waits in RabbitMQ and runs
+  once they are up. Logs: `docker compose logs worker worker-bulk | grep event=`.
+- Pointing the stack at a real (paid) toolbox: swap `AI_TOOLBOX_BASE_URL` / `AI_TOOLBOX_API_KEY` in `.env` and
+  `make dev`; `make toolbox-check` is red by design then (a real model is enabled), and e2e/BDD runs cost money —
+  switch back to the fake toolbox for them.
 - Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
   create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc
   collation: run `REINDEX DATABASE entirius` once after the switch).
