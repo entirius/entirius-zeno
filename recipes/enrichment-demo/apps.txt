@@ -1,0 +1,34 @@
+# The oohlala test env's module set without the client's code: every module of shop except Magento, BaseLinker,
+# GetResponse, crypt and the B2B ones (leads, communicator, siteintel, regon_api).
+django_regional
+django_utils
+django_utils.toolbox
+django_utils_translator
+django_pim
+django_pricemanager
+django_atlas
+django_pricefighter
+django_lookup
+django_notifications
+django_pim_csv
+django_pim_translator
+django_faq
+django_munin
+django_captcha
+django_agreements
+django_deliverypoints
+django_qms
+django_email
+django_contact_forms
+django_enrichment
+django_contentdb
+django_accounts
+django_suppliers
+django_contentdb_translator
+django_sitemap
+django_vault
+django_reviews
+django_matrix
+django_checkout
+django_returns
+django_omnibus

@@ -1,0 +1,18 @@
+# shop's queues without those of leads, communicator, siteintel and the Magento modules.
+celery
+pricemanager_create_pricelist
+atlas_default
+atlas_images
+atlas_results
+lookup
+notifications_default
+quantities
+contact_forms
+contact_forms_conversions
+enrichment
+enrichment_interactive
+contentdb
+supplier_default
+supplier_images
+supplier_results
+matrix_pull
