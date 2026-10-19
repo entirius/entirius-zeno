@@ -229,6 +229,9 @@ ACCESS_GATE_MODE = config("ACCESS_GATE_MODE", default="enforce")
 # django_accounts signup (EMAIL_DOUBLE_OPTIN) builds the confirmation link from this; unset, every signup is a 500.
 # The storefront (:3100) receives it at /user-handler?key=&uid= and activates the account.
 NEW_ACCOUNT_REDIRECT_URL = config("NEW_ACCOUNT_REDIRECT_URL", default="http://localhost:3100/user-handler")
+# The password reset mail (customer/password/reset/) links to this with ?key=; unset, every reset request is a 500.
+# The storefront receives it at /reset-password and POSTs the new password to customer/password/reset/<key>/.
+RESET_PASSWORD_REDIRECT_URL = config("RESET_PASSWORD_REDIRECT_URL", default="http://localhost:3100/reset-password")
 
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
