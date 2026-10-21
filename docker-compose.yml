@@ -103,6 +103,9 @@ services:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
       # LEADS_IMPORT_TMP_DIR: the queued CSV import written here is read by the worker
       - leads_import_tmp:/tmp/django_leads
+      # MEDIA_ROOT: one volume for service, workers and beat — pictures imported or generated in one
+      # container are read by the others and survive a container recreate
+      - media:/entirius/services/${SERVICE:-entirius-service-volkanos}/media
       - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
@@ -288,6 +291,7 @@ services:
     volumes:
       - ${TESTS_PATH:-./repos/tests}/entirius-test-package-emporium:/entirius/test-package:ro
       - leads_import_tmp:/tmp/django_leads
+      - media:/entirius/services/${SERVICE:-entirius-service-volkanos}/media
       - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
@@ -351,6 +355,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - media:/entirius/services/${SERVICE:-entirius-service-volkanos}/media
       - ./recipes:/entirius/recipes:ro
     depends_on:
       db:
@@ -371,6 +376,7 @@ volumes:
   www_node_modules:
   www_next:
   leads_import_tmp:
+  media:
 
 networks:
   zeno:

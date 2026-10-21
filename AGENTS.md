@@ -122,6 +122,11 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   entrypoint overwrites it on every dev start.
 - The dev-mode workers run your mounts, but Celery has no autoreload — restart `worker` and
   `worker-bulk` after module changes that affect tasks.
+- The service's `MEDIA_ROOT` (`/entirius/services/<SERVICE>/media`) is the named volume `media`, mounted in `service`,
+  `worker`, `worker-bulk` and `beat` in baked and dev mode alike: a picture imported in one container is there for the
+  others (an AI image task reads what `service` imported, `service` previews what the task wrote) and survives a
+  recreate (`make up` after `make build`). `make down` keeps it, `make clean` drops it (`down -v`), a second stack has its own.
+  In dev mode it shadows the host clone's `media/`, as `service_venv` does `.venv`.
 - Feed URLs pointing at the `fixtures` container need the SSRF escape hatches in
   `docker/settings_local.py` (`SUPPLIER_BLOCK_PRIVATE_HOSTS` / `ATLAS_BLOCK_PRIVATE_HOSTS`).
 - Standalone re-runs of `seed-atlas-e2e.py` wipe the pricefighter-calibrated
