@@ -42,7 +42,8 @@ Customer signup (`POST /api/accounts/v1/default-europe/customer/signup/`) mails 
 `NEW_ACCOUNT_REDIRECT_URL` (`docker/settings_local.py`, default the storefront's `/user-handler`); the mail lands in
 GreenMail (`make mail`). A 500 on signup means the setting is missing. The password reset
 (`POST …/customer/password/reset/`) works the same way with `RESET_PASSWORD_REDIRECT_URL` (default the storefront's
-`/reset-password`).
+`/reset-password`); a staff account gets `CMS_RESET_PASSWORD_REDIRECT_URL` instead (default the CMS's
+`/password-reset`).
 
 The seed prints step timers (`[65s] Step 2: Load Fixtures`) and ends with `SEED OK in Ns` —
 if it dies it names the failed step (`SEED FAILED (exit N) during: ...`).
