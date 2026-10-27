@@ -113,16 +113,16 @@ dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 	@python3 scripts/dashboard.py 2>/dev/null || true
 	@$(MAKE) --no-print-directory urls
 
-link:  ## Re-link mounted module repos in service AND worker without restarting (dev mode)
-	@for svc in service worker; do \
+link:  ## Re-link mounted module repos in service AND workers without restarting (dev mode)
+	@for svc in service worker worker-bulk; do \
 		echo "== $$svc =="; \
 		$(COMPOSE) exec $$svc sh -c '\
 			for dir in /entirius/py/*/ /entirius/django/*/; do \
 				[ -f "$$dir/pyproject.toml" ] || continue; \
 				uv pip install --no-deps -e "$$dir"; \
-			done'; \
+			done' || echo "$$svc is not running - skipped"; \
 	done
-	@echo "NOTE: celery does not autoreload — restart the worker to pick up task-code changes"
+	@echo "NOTE: celery does not autoreload — restart worker and worker-bulk to pick up task-code changes"
 
 embed:  ## Start the embedding service (profile embed; EMBED_GPU=0 for CPU) — first start downloads the model
 	@$(EMBED_COMPOSE) $(PROFILES) --profile embed up -d embed

@@ -299,6 +299,18 @@ services:
     networks:
       - zeno
 
+  # Bulk worker — the recipe's bulk-queues.txt (enrichment "Add to queue" runs), one task at a time, so a bulk run
+  # never blocks a single click on the main worker's interactive lane. A recipe without bulk queues: exits 0.
+  worker-bulk:
+    extends: worker
+    command:
+      - sh
+      - -c
+      - >-
+        q=$$(sh /entirius/recipes/resolve.sh bulk-queues) || exit 2;
+        [ -n "$$q" ] || { echo "recipe $${RECIPE:-shop} has no bulk queues - bulk worker not started"; exit 0; };
+        exec celery -A main worker -l info -c 1 -n bulk@%h -Q "$$q"
+
   # Celery beat — the real cadence of CELERY_BEAT_SCHEDULE (docker/settings_local.py) for the
   # leads platform; BDD calls the modules' test endpoints instead of waiting for it.
   beat:

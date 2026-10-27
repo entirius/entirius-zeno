@@ -6,6 +6,7 @@ atlas_results
 lookup
 quantities
 enrichment
+enrichment_interactive
 supplier_default
 supplier_images
 supplier_results

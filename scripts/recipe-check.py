@@ -29,6 +29,12 @@ def entries(path: Path) -> list[str]:
     return [line for line in lines if line]
 
 
+def recipe_queues(recipe: Path) -> list[str]:
+    """The worker's queues plus the bulk worker's (optional `bulk-queues.txt`)."""
+    bulk = recipe / "bulk-queues.txt"
+    return entries(recipe / "queues.txt") + (entries(bulk) if bulk.is_file() else [])
+
+
 def duplicates(items: list[str]) -> list[str]:
     return sorted({item for item in items if items.count(item) > 1})
 
@@ -65,7 +71,7 @@ def queue_problems(queues: list[str], enabled: list[dict]) -> list[str]:
     return [
         *(f"queues.txt lacks {queue}" for queue in sorted(wanted - set(queues))),
         *(f"queues.txt lists {queue}, which no enabled module uses" for queue in sorted(set(queues) - wanted)),
-        *(f"{queue} is listed twice in queues.txt" for queue in duplicates(queues)),
+        *(f"{queue} is listed twice in queues.txt / bulk-queues.txt" for queue in duplicates(queues)),
     ]
 
 
@@ -80,7 +86,7 @@ def file_problems(recipe: Path) -> list[str]:
 
 
 def problems(recipe: Path, registry: dict) -> list[str]:
-    apps, queues = entries(recipe / "apps.txt"), entries(recipe / "queues.txt")
+    apps, queues = entries(recipe / "apps.txt"), recipe_queues(recipe)
     enabled = [module for module in registry["modules"] if set(module["apps"]) & set(apps)]
     core = [module for module in registry["modules"] if module["core"] and module not in enabled]
     return [
@@ -102,7 +108,7 @@ def main() -> None:
         sys.exit("\n".join(f"recipe-check: {path} not found" for path in missing))
     if found := problems(recipe, yaml.safe_load(registry.read_text())):
         sys.exit("\n".join(f"recipe-check: {name}: {problem}" for problem in found))
-    apps, queues = entries(recipe / "apps.txt"), entries(recipe / "queues.txt")
+    apps, queues = entries(recipe / "apps.txt"), recipe_queues(recipe)
     print(f"recipe-check: {name} ok ({len(apps)} apps, {len(queues)} queues)")
 
 

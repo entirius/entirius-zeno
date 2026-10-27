@@ -16,6 +16,7 @@ leads_default
 contact_forms
 contact_forms_conversions
 enrichment
+enrichment_interactive
 contentdb
 supplier_default
 supplier_images

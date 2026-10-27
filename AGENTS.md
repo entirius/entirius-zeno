@@ -31,7 +31,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
 | `make hotfix-agent` / `hotfix-status` / `hotfix-stop` | CMS hotfix agent: takes cms-blueprint issues from the internal Redmine (New/To Do, unassigned or ours), fixes them through the dev-runner on a `hotfix/<issue>` worktree (`repos/pwa/entirius-pwa-cms-hotfix`, from `origin/master`) and releases the next patch version on GitHub; max 3 releases/day, $25/issue; runbook `scripts/hotfix-agent/README.md` |
-| `make stranger-run` | the first run from zero on an isolated second stack, every step timed into one JSON: a clone of this tree in `.runner/stranger/`, no SSH, no `gh`, no `uv`, cold `make setup`, checks, cached re-run, teardown, then the service alone with `uv` (`ZENO_STACK=s2`, `ZENO_PORT_OFFSET=1000`, `STRANGER_BRANCH`, `BUILD_ARGS`, `RECIPE`, `TESTS_FROM=local` = this tree's test-package clone instead of GitHub, `BDD=1` = `make bdd` after the checks, never fatal, `KEEP=1`, `SERVICE_ONLY=0`, `OUT`, `STRANGER_DIR`); built from the service lock, so a stack without access until access ships in it |
+| `make stranger-run` | the first run from zero on an isolated second stack, every step timed into one JSON: a clone of this tree in `.runner/stranger/`, no SSH, no `gh`, no `uv`, cold `make setup`, checks, cached re-run, teardown, then the service alone with `uv` (`ZENO_STACK=s2`, `ZENO_PORT_OFFSET=1000`, `STRANGER_BRANCH`, `BUILD_ARGS`, `RECIPE`, `TESTS_FROM=local` = this tree's test-package clone instead of GitHub, `BDD=1` = `make bdd` after the checks, never fatal, `KEEP=1`, `SERVICE_ONLY=0`, `STRANGER_SERVICE_BRANCH=release/X.Y.Z` = build that service branch's lock, `OUT`, `STRANGER_DIR`); built from the service lock (access included since service 4.0.0) |
 | `make recipe-check` / `recipe-probe` | a recipe (`RECIPE=shop`) against the service's `modules.yaml`: known apps, requirements present and in order, core modules, queues, seed profile; `recipe-probe` boots that app set inside the running service container (system check, URL conf, every module imported), read-only |
 | `make check` | guard: canonical `.gitleaks.toml` symlink present |
 | `make clean` | remove containers and volumes |
@@ -48,8 +48,11 @@ No application code lives here — compose + Makefile + Dockerfile only.
   every module repo found in `repos/py/` and `repos/django/`. A module clone ahead of the service lock may need a
   package the lock lacks until the next release: the entrypoint installs what is missing and upgrades nothing the
   lock pinned (`=== Dev mode: installing dependencies missing from the service lock` in the service log). The worker gets the same
-  mounts with its own venv volume; its queue list is the recipe's `queues.txt`.
-- A recipe (`recipes/<name>/`: `apps.txt`, `queues.txt`, `seed-profile`) names the modules the stack enables
+  mounts with its own venv volume; its queue list is the recipe's `queues.txt`. A second worker, `worker-bulk`
+  (`-c 1`, own venv volume), consumes the recipe's `bulk-queues.txt` (`enrichment_bulk`: enrichment "Add to queue"
+  runs), so a bulk run never blocks a single click on the main worker's `enrichment_interactive`; a recipe without
+  `bulk-queues.txt` leaves it exited (0).
+- A recipe (`recipes/<name>/`: `apps.txt`, `queues.txt`, optional `bulk-queues.txt`, `seed-profile`) names the modules the stack enables
   (`LOCAL_APPS`, registry order), the queues the worker consumes and the seed profile of the test package;
   `recipes/resolve.sh` reads it for compose, `docker/settings_local.py` and the scripts. Unset `RECIPE` = `shop`, every
   module. Access is never in a recipe: the service enables it wherever the package is installed.
@@ -71,8 +74,9 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
 | `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
+| `make e2e E2E_ARGS="e2e/cms/ -k ai_studio"` (`make cms-dev`, `CMS_BASE_URL=http://localhost:8080` to the test-package make, fake toolbox) | 33 passed (measured 2026-10-15, twice) | ~6 min |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
-| `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1250 passed / 0 failed / 29 skipped (measured 2026-10-13) | 16 min |
+| `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1260 passed / 0 failed / 29 skipped (measured 2026-10-27 on service 4.1.0) | 21 min |
 | `make stranger-run RECIPE=catalog TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 832 passed / 0 failed / 447 skipped (measured 2026-10-13) | 6 min |
 | `make stranger-run RECIPE=pim TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront not started · BDD 696 passed / 0 failed / 583 skipped (measured 2026-10-13) | 6 min |
 | `make stranger-run RECIPE=website TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront not started · BDD 727 passed / 0 failed / 552 skipped (measured 2026-10-13) | 4 min |
@@ -116,8 +120,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   three containers.
 - Edit `docker/settings_local.py`, never `main/settings_local.py` in the clone — the
   entrypoint overwrites it on every dev start.
-- The dev-mode worker runs your mounts, but Celery has no autoreload — restart the
-  worker after module changes that affect tasks.
+- The dev-mode workers run your mounts, but Celery has no autoreload — restart `worker` and
+  `worker-bulk` after module changes that affect tasks.
 - Feed URLs pointing at the `fixtures` container need the SSRF escape hatches in
   `docker/settings_local.py` (`SUPPLIER_BLOCK_PRIVATE_HOSTS` / `ATLAS_BLOCK_PRIVATE_HOSTS`).
 - Standalone re-runs of `seed-atlas-e2e.py` wipe the pricefighter-calibrated
@@ -135,6 +139,13 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - With the toolbox enabled it must be up before seed (`make toolbox-check` green); with `AI_TOOLBOX_ENABLED=0` seed
   and BDD run without it and skip `@needs-toolbox`. It runs outside zeno (its own repo,
   `runserver 0.0.0.0:8300`), containers reach it as `host.docker.internal`.
+- Enrichment runs go through a work queue: a run is planned into units (`enrichment.plan_task`), workers claim them
+  with a lease (`enrichment.consume`), and beat runs `enrichment.reap` every minute (expired leases back to the queue,
+  stale-queue and failure alerts). A run spawned while `worker` / `worker-bulk` are down waits in RabbitMQ and runs
+  once they are up. Logs: `docker compose logs worker worker-bulk | grep event=`.
+- Pointing the stack at a real (paid) toolbox: swap `AI_TOOLBOX_BASE_URL` / `AI_TOOLBOX_API_KEY` in `.env` and
+  `make dev`; `make toolbox-check` is red by design then (a real model is enabled), and e2e/BDD runs cost money —
+  switch back to the fake toolbox for them.
 - Postgres is `pgvector/pgvector:pg16` — ships `vector`, `pg_trgm`, `unaccent`; module migrations
   create them. Data volume is shared with the old `postgres:16-alpine` (same major, but musl→glibc
   collation: run `REINDEX DATABASE entirius` once after the switch).
@@ -148,8 +159,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   vectors left the search resolving ties by traversal order, so the image leg looked random. With
   real vectors it is deterministic — three fresh seeds returned the same number.
   `manage.py lookup_doctor` is the handshake that catches it.
-- The access gate runs in dev mode until access ships in the service lock (the baked stack has no gate, no role
-  users, no `@access` scenarios). In dev mode `django_access` is on in `enforce`; the mode comes from `.env` `ACCESS_GATE_MODE` (`enforce` |
+- The access gate runs in the baked stack and in dev mode: access ships in the service lock since service 4.0.0.
+  In dev mode `django_access` is on in `enforce`; the mode comes from `.env` `ACCESS_GATE_MODE` (`enforce` |
   `observe` | `off`) through compose — a changed value needs `make dev` (a restart keeps the old env). Staff see it
   as `gate_mode` in `GET api/access/v2/me/`.
 - Seed creates the staff role users `viewer`, `editor`, `manager`, `accessadmin` (Administrator) and `norole` (staff,

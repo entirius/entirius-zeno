@@ -96,6 +96,10 @@ if _enabled("django_lookup", "django_pim"):
 ENRICHMENT_ADAPTERS: dict[str, str] = {}
 if _enabled("django_enrichment", "django_atlas"):
     ENRICHMENT_ADAPTERS["atlas"] = "django_atlas.services.enrichment_adapter"
+if _enabled("django_enrichment", "django_pim"):
+    ENRICHMENT_ADAPTERS["pim"] = "django_pim.services.enrichment_adapter"
+if _enabled("django_enrichment", "django_contentdb"):
+    ENRICHMENT_ADAPTERS["contentdb"] = "django_contentdb.services.enrichment_adapter"
 
 # Leads platform — mail goes to the in-network GreenMail sandbox (make mail), never out.
 # django_email resolves SMTP per channel; the global EMAIL_HOST is the fallback for every sender except
@@ -185,10 +189,16 @@ CELERY_BEAT_SCHEDULE = {
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
+    # Work queue: expired leases back to the queue, stalled work escalated, consumers restarted after a crash.
+    "enrichment-reap": {"task": "enrichment.reap", "schedule": 60},
 }
-# An entry stays only when the app of its task (`django_<x>.…`) is enabled.
+# An entry stays only when the app of its task is enabled. Most task names are `django_<x>.…`; the enrichment
+# tasks are `enrichment.…`, so the prefixes that differ from their app are mapped explicitly.
+_BEAT_TASK_APPS = {"enrichment": "django_enrichment"}
 CELERY_BEAT_SCHEDULE = {
-    name: entry for name, entry in CELERY_BEAT_SCHEDULE.items() if _enabled(entry["task"].split(".")[0])
+    name: entry
+    for name, entry in CELERY_BEAT_SCHEDULE.items()
+    if _enabled(_BEAT_TASK_APPS.get(prefix := entry["task"].split(".")[0], prefix))
 }
 
 # QMS strategy: the demo package channels are XRAY (CSV-driven quantities);
@@ -219,6 +229,12 @@ ACCESS_GATE_MODE = config("ACCESS_GATE_MODE", default="enforce")
 # django_accounts signup (EMAIL_DOUBLE_OPTIN) builds the confirmation link from this; unset, every signup is a 500.
 # The storefront (:3100) receives it at /user-handler?key=&uid= and activates the account.
 NEW_ACCOUNT_REDIRECT_URL = config("NEW_ACCOUNT_REDIRECT_URL", default="http://localhost:3100/user-handler")
+# The password reset mail (customer/password/reset/) links to this with ?key=; unset, every reset request is a 500.
+# The storefront receives it at /reset-password and POSTs the new password to customer/password/reset/<key>/.
+RESET_PASSWORD_REDIRECT_URL = config("RESET_PASSWORD_REDIRECT_URL", default="http://localhost:3100/reset-password")
+# Staff (is_staff) get the CMS page instead; unset, their reset link would point at the storefront.
+# The CMS (:8180) receives it at /password-reset?key=.
+CMS_RESET_PASSWORD_REDIRECT_URL = config("CMS_RESET_PASSWORD_REDIRECT_URL", default="http://localhost:8180/password-reset")
 
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
