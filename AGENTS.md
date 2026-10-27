@@ -76,7 +76,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
 | `make e2e E2E_ARGS="e2e/cms/ -k ai_studio"` (`make cms-dev`, `CMS_BASE_URL=http://localhost:8080` to the test-package make, fake toolbox) | 33 passed (measured 2026-10-15, twice) | ~6 min |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
-| `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1250 passed / 0 failed / 29 skipped (measured 2026-10-13) | 16 min |
+| `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1260 passed / 0 failed / 29 skipped (measured 2026-10-27 on service 4.1.0) | 21 min |
 | `make stranger-run RECIPE=catalog TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 832 passed / 0 failed / 447 skipped (measured 2026-10-13) | 6 min |
 | `make stranger-run RECIPE=pim TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront not started · BDD 696 passed / 0 failed / 583 skipped (measured 2026-10-13) | 6 min |
 | `make stranger-run RECIPE=website TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront not started · BDD 727 passed / 0 failed / 552 skipped (measured 2026-10-13) | 4 min |
