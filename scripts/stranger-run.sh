@@ -23,6 +23,8 @@
 #                     current branch with its uncommitted work
 #   BDD               1 = `make bdd` after the checks, with the real PATH (0); its verdict never fails the run
 #   SERVICE_ONLY      0 = skip phase 2 (1)
+#   STRANGER_SERVICE_BRANCH  service branch the isolated stack builds (its .env default, develop) — a release
+#                     branch proves that branch's lock
 #
 # The isolated stack never shares a name with the main one: every compose call runs in the checkout with its own
 # .env, and nothing is torn down unless that .env carries the isolated project name.
@@ -125,6 +127,7 @@ do_clone() { # leftovers of an earlier run first; the .env, recipe included, is 
   stranger git clone --branch "$BRANCH" "file://$ROOT" "$CHECKOUT"
   if [[ $DIRTY == true ]]; then copy_dirty "$ROOT" "$CHECKOUT"; fi
   in_checkout ZENO_STACK="$STACK" ZENO_PORT_OFFSET="$OFFSET" RECIPE="$RECIPE" make init
+  if [[ -n ${STRANGER_SERVICE_BRANCH:-} ]]; then echo "SERVICE_BRANCH=$STRANGER_SERVICE_BRANCH" >>"$CHECKOUT/.env"; fi
   isolated
 }
 
