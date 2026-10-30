@@ -236,6 +236,10 @@ RESET_PASSWORD_REDIRECT_URL = config("RESET_PASSWORD_REDIRECT_URL", default="htt
 # The CMS (:8180) receives it at /password-reset?key=.
 CMS_RESET_PASSWORD_REDIRECT_URL = config("CMS_RESET_PASSWORD_REDIRECT_URL", default="http://localhost:8180/password-reset")
 
+# Thumbnails of product and category pictures (pim-thumbs-generate, run by the seed); unset, the seed skips the step and
+# the API's source_set carries only the original file. The sizes the test package documents: WebP 90%, 160-1400 px.
+THUMBS_CONFIG = [(size, size, "resize ratio, transparent", "webp", 90) for size in (160, 320, 640, 960, 1400)]
+
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
 
