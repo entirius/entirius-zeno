@@ -5,8 +5,9 @@
 #
 # Drift check of the generated OpenAPI specs (make schema) against a published copy.
 #   bash scripts/schema-check.sh <dir>     # <dir> holds volkanos-api-{admin,storefront}.yaml
-# Exit 0 = all equal, 1 = drift (diff in build/openapi/drift-<audience>.diff), 2 = missing argument or file.
-# Writes only in build/openapi/.
+# Exit 0 = all equal, 1 = drift (diff in build/openapi/drift-<audience>.diff) or a published `info.version` other
+# than `service` in the docs' src/data/platform.json (checked when <dir> is a docs clone's public/openapi),
+# 2 = missing argument or file. Writes only in build/openapi/.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -27,4 +28,18 @@ for audience in admin storefront; do
     rc=1
   fi
 done
+
+platform=$1/../../src/data/platform.json
+if [[ -f $platform ]]; then
+  want=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["service"])' "$platform")
+  for audience in admin storefront; do
+    have=$(sed -n 's/^  version: //p' "$1/volkanos-api-$audience.yaml" | head -1)
+    if [[ $have == "$want" ]]; then
+      echo "schema-check: volkanos-api-$audience.yaml is version $have, as platform.json"
+    else
+      echo "schema-check: volkanos-api-$audience.yaml is version $have, platform.json says service $want"
+      rc=1
+    fi
+  done
+fi
 exit $rc

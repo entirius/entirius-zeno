@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe pr-inventory
 .DEFAULT_GOAL := help
 
 -include .env
@@ -141,7 +141,7 @@ module-test:  ## Run a mounted module's tests in the service container: make mod
 # Public OpenAPI specs from the running service. The container never mounts this checkout, so the YAML comes over
 # stdout; spectacular warnings go to the .log next to it. A failed run leaves the previous spec in place.
 SCHEMA_OUT = build/openapi
-SCHEMA_DOCS ?= $(DOCS_PATH)/launch/entirius-docs-launch/public/openapi
+SCHEMA_DOCS ?= $(DOCS_PATH)/entirius-docs/public/openapi
 SCHEMA_RUN = $(COMPOSE) $(PROFILES) exec -T service python manage.py spectacular --skip-checks --custom-settings
 
 # The dev entrypoint's copy of docker/settings_local.py, repeated here; an unchanged file is not written, and a
@@ -162,8 +162,11 @@ schema: schema-admin schema-storefront  ## Public OpenAPI specs (admin / storefr
 	@echo "$(SCHEMA_OUT)/volkanos-api-admin.yaml"
 	@echo "$(SCHEMA_OUT)/volkanos-api-storefront.yaml"
 
-schema-check: schema  ## Regenerate the specs and diff them against the docs worktree (SCHEMA_DOCS); exit 1 on drift
+schema-check: schema  ## Regenerate the specs and diff them against the docs clone (SCHEMA_DOCS); exit 1 on drift or a version other than platform.json
 	@bash scripts/schema-check.sh $(SCHEMA_DOCS)
+
+pr-inventory:  ## PR review inventory: clones, open PRs of the entirius org, public docs drift (SYNC=1 = clones to develop first)
+	@python3 scripts/pr-review/inventory.py $(if $(filter 1,$(SYNC)),--sync)
 
 down:  ## Stop everything
 	$(COMPOSE_DEV) $(ALL_PROFILES) down
