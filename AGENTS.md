@@ -211,7 +211,9 @@ Two tiers, split by the knowledge contract — never duplicate a rule across the
 
 A review of the open PRs of the org follows `02-workflow/procedura-review-pr.md` in the internal standards repo: idea
 check, code review, fixes and tests, docs, merge, release, deploy and an up-to-date docs.entirius.com; `make pr-inventory`
-starts and closes it.
+starts and closes it. A platform release (every repo with unreleased changes, the service version as the platform version,
+CMS, docs.entirius.com, deploy) follows `02-workflow/procedura-release-platformy.md` in the same repo; between releases
+own fix branches merge straight into `develop`, without a PR.
 
 Product architecture decisions are ADRs in `entirius-docs/src/content/docs/architecture/` — not in either list above.
 The standards repo is Polish and private (client names); the handbook is English and public.
