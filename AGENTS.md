@@ -27,7 +27,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make docs` / `clone-docs` | docs portal (:4421, Astro hot reload) from `repos/docs/entirius-docs` — private GitLab clone, not built from GitHub; `make docs-alt DOCS_ALT_BRANCH=x` runs a second branch on :4422 |
 | `make docs-screens` | CMS screenshots for the docs how-tos, captured from the dev CMS (English, dark, 1280 × 800) by the CMS clone's `tests/docs/` project into `DOCS_SCREENS_REPO` (a docs checkout, default `repos/docs/entirius-docs`) `src/assets/screens/<guide>/`; `GUIDE=<name>` runs one guide, `DOCS_SCREENS_OUT` overrides the folder; needs `make cms-dev`; captures write to the live database |
 | `make www WWW_BRANCH=x` | marketing site entirius.com (:3200, Next.js hot reload) from `repos/www/entirius-react-www-<branch>` — private GitLab clone |
-| `make schema` / `schema-check` | public OpenAPI specs from the running service into `build/openapi/` (admin / storefront, v2 only, tag groups); `schema-check` diffs them against the docs worktree (`SCHEMA_DOCS`), exit 1 on drift |
+| `make schema` / `schema-check` | public OpenAPI specs from the running service into `build/openapi/` (admin / storefront, v2 only, tag groups); `schema-check` diffs them against the docs clone (`SCHEMA_DOCS`, default `repos/docs/entirius-docs/public/openapi`), exit 1 on drift or when the published `info.version` is not `service` in the docs' `platform.json`. Specs for docs.entirius.com come from a stack built from the release tag (`make build SERVICE_BRANCH=vX.Y.Z`, `make up`), never from dev mounts |
+| `make pr-inventory` | PR review inventory: main clones off their upstream, every open PR of the `entirius` org (author team/external/bot, base, size, CI, mergeable, age), public docs drift (docs.entirius.com spec and demo-api `info.version`, latest service and CMS releases against the docs' `platform.json`); `SYNC=1` first puts every clean clone on `develop` level with origin, leaves dirty ones and ones with commits origin lacks, never touches worktrees |
 | `make urls` / `dashboard` | ports/URLs of running services from live containers (auto after `up`/`dev`); regenerate the Zeno Suite page |
 | `make shell` / `logs` / `status` | debugging |
 | `make hotfix-agent` / `hotfix-status` / `hotfix-stop` | CMS hotfix agent: takes cms-blueprint issues from the internal Redmine (New/To Do, unassigned or ours), fixes them through the dev-runner on a `hotfix/<issue>` worktree (`repos/pwa/entirius-pwa-cms-hotfix`, from `origin/master`) and releases the next patch version on GitHub; max 3 releases/day, $25/issue; runbook `scripts/hotfix-agent/README.md` |
@@ -170,6 +171,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
 - `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
   service default is staff-only. `DRF_NUM_PROXIES = 0` there (no proxy, `REMOTE_ADDR` only); unset fails `check --deploy` with `volkanos.E001`.
+- A variable for one make run goes on the command line (`make build SERVICE_BRANCH=v4.1.0`): the Makefile includes
+  `.env`, so `.env` wins over an environment variable (`SERVICE_BRANCH=v4.1.0 make build` builds `.env`'s branch).
 - `make schema` refreshes `main/settings_local.py` in the service container when `docker/settings_local.py` changed;
   spectacular warnings are in `build/openapi/*.log`.
 - Ten wrong passwords for one user on `api/token/` block that user from that address for 15 minutes — a probe
@@ -201,6 +204,10 @@ Two tiers, split by the knowledge contract — never duplicate a rule across the
 |---|---|---|
 | Public engineering canon | `repos/docs/entirius-docs/src/content/docs/handbook/` (`make clone-docs`, served by `make docs`) | how to write code: `django-module.md` (module layout: models/schemas/services/api), `api-v2/*`, `python-toolchain.md`, `git-flow.md`, `releases.md`, `repo-naming.md`, `makefile.md`, `ci-cd.md`, `language.md`, `licensing.md`, `secret-scanning.md`, `agents-md.md` |
 | Internal additions | `~/kloczi_pc/coding/ecomhouse/standardy-rozwoju-oprogramowania/` — the canonical clone, **not** under `repos/`; every `.gitleaks.toml` symlink in this repo and in the module clones resolves into it | registries (`rejestr-*`), gitleaks blocklists + repo templates (`02-workflow/templates/`), agent working convention, migration/cutover procedures, `03-entirius-zeno/` (this harness's program folder), `04-kontrakt-wiedzy/` (the contract itself) |
+
+A review of the open PRs of the org follows `02-workflow/procedura-review-pr.md` in the internal standards repo: idea
+check, code review, fixes and tests, docs, merge, release, deploy and an up-to-date docs.entirius.com; `make pr-inventory`
+starts and closes it.
 
 Product architecture decisions are ADRs in `entirius-docs/src/content/docs/architecture/` — not in either list above.
 The standards repo is Polish and private (client names); the handbook is English and public.
