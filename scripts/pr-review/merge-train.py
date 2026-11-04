@@ -71,9 +71,7 @@ def join_changelog(path: Path) -> None:
         theirs = sections(match.group(2))[1]
         out = []
         for heading in order:
-            entries = trimmed(body.get(heading, [])) + trimmed(
-                theirs.get(heading, []) if heading in theirs else []
-            )
+            entries = trimmed(body.get(heading, [])) + trimmed(theirs.get(heading, []) if heading in theirs else [])
             if heading is not None:
                 out += [heading, ""]
             out += entries + ([""] if entries else [])
@@ -87,9 +85,7 @@ def update_branch(wt: Path) -> bool:
     before = run("git", "rev-parse", "HEAD", cwd=wt).stdout.strip()
     merged = run("git", "merge", "--no-edit", "origin/develop", cwd=wt, check=False)
     if merged.returncode:
-        files = run(
-            "git", "diff", "--name-only", "--diff-filter=U", cwd=wt
-        ).stdout.split()
+        files = run("git", "diff", "--name-only", "--diff-filter=U", cwd=wt).stdout.split()
         if set(files) - {"CHANGELOG.md"}:
             raise SystemExit(f"conflict outside CHANGELOG.md: {files}")
         join_changelog(wt / "CHANGELOG.md")
@@ -112,9 +108,7 @@ def wait_checks(repo: str, pr: str) -> None:
 
 def merge_one(clone: str, repo: str, spec: str) -> None:
     pr, _, who = spec.partition(":")
-    info = json.loads(
-        run("gh", "pr", "view", pr, "-R", repo, "--json", "headRefName,state").stdout
-    )
+    info = json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "headRefName,state").stdout)
     if info["state"] == "MERGED":
         print(f"{repo}#{pr} already merged", flush=True)
         return
@@ -136,12 +130,7 @@ def merge_one(clone: str, repo: str, spec: str) -> None:
         if who == "team":
             run("gh", "pr", "review", pr, "-R", repo, "--approve", "--body", APPROVE)
         for attempt in range(4):
-            if (
-                json.loads(
-                    run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout
-                )["state"]
-                == "MERGED"
-            ):
+            if json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout)["state"] == "MERGED":
                 break  # a merge call that reported an error can still have merged
             run("git", "fetch", "-q", "origin", cwd=wt)
             if update_branch(wt):
@@ -153,21 +142,15 @@ def merge_one(clone: str, repo: str, spec: str) -> None:
                     cwd=wt,
                 )
             local = run("git", "rev-parse", "HEAD", cwd=wt).stdout.strip()
-            for _ in range(
-                20
-            ):  # the PR must point at what was pushed before its checks mean anything
-                pr_head = json.loads(
-                    run(
-                        "gh", "pr", "view", pr, "-R", repo, "--json", "headRefOid"
-                    ).stdout
-                )["headRefOid"]
+            for _ in range(20):  # the PR must point at what was pushed before its checks mean anything
+                pr_head = json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "headRefOid").stdout)[
+                    "headRefOid"
+                ]
                 if pr_head == local:
                     break
                 time.sleep(15)
             else:
-                raise SystemExit(
-                    f"{repo}#{pr}: PR head {pr_head[:8]} never became {local[:8]} (close/reopen the PR)"
-                )
+                raise SystemExit(f"{repo}#{pr}: PR head {pr_head[:8]} never became {local[:8]} (close/reopen the PR)")
             wait_checks(repo, pr)
             if (
                 run(
@@ -187,9 +170,7 @@ def merge_one(clone: str, repo: str, spec: str) -> None:
             time.sleep(30)  # GitHub still computing mergeability, or a transient 502
         else:
             raise SystemExit(f"{repo}#{pr}: merge refused 4 times")
-        state = json.loads(
-            run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout
-        )["state"]
+        state = json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout)["state"]
         print(f"{repo}#{pr} {state}", flush=True)
     finally:
         run("git", "-C", clone, "worktree", "remove", "--force", str(wt), check=False)
