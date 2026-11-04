@@ -236,6 +236,14 @@ RESET_PASSWORD_REDIRECT_URL = config("RESET_PASSWORD_REDIRECT_URL", default="htt
 # The CMS (:8180) receives it at /password-reset?key=.
 CMS_RESET_PASSWORD_REDIRECT_URL = config("CMS_RESET_PASSWORD_REDIRECT_URL", default="http://localhost:8180/password-reset")
 
+# django_agreements starts the newsletter confirmation and unsubscribe links with this; unset, they point at :3000.
+STOREFRONT_BASE_URL = config("STOREFRONT_BASE_URL", default="http://localhost:3100")
+# The key a storefront sends to newsletter/subscribe/ (zeno dev-only value; compose passes it to the service and bakes
+# it into the storefront). migrate imports it as an access token with the publishable scope agreements.subscribe
+# (access_import_legacy_keys); without it a guest cannot subscribe.
+if _enabled("django_agreements"):
+    AGREEMENTS_API_KEY = config("AGREEMENTS_API_KEY", default="zeno-dev-only-newsletter-subscribe-key")
+
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
 

@@ -28,6 +28,8 @@ WORKDIR ${APP_DIR}
 ARG api_base_url=http://localhost:8100
 ARG channel=default-europe
 ARG checkout_key=entirius-docker-checkout-dev-key-2026
+# The channel's newsletter key: without it the storefront shows no newsletter form (AGREEMENTS_API_KEY, compose).
+ARG newsletter_key=zeno-dev-only-newsletter-subscribe-key
 ENV API_BASE_URL=${api_base_url}
 RUN cp -r _CONFIG.example _CONFIG && node -e "\
 const fs = require('fs'); \
@@ -35,7 +37,8 @@ const rw = (f, fn) => { const p = '_CONFIG/' + f; \
   fs.writeFileSync(p, JSON.stringify(fn(JSON.parse(fs.readFileSync(p))), null, 2)); }; \
 rw('app.config.json', c => ({ ...c, API_BASE_URL: '${api_base_url}' })); \
 rw('channels.config.json', () => ({ '${channel}': \
-  { CHANNEL_LABEL: '${channel}', API_CHECKOUT_KEY: '${checkout_key}' } })); \
+  { CHANNEL_LABEL: '${channel}', API_CHECKOUT_KEY: '${checkout_key}', \
+    API_NEWSLETTER_KEY: '${newsletter_key}' } })); \
 rw('countries.config.json', c => ({ default: \
   { ...c.default, channels: ['${channel}'], default_channel: '${channel}' } })); \
 "
