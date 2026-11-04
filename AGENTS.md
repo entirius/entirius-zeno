@@ -167,6 +167,9 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   no role), password `<username>123` (dev defaults), and imports the legacy fixture API keys as access tokens
   (`access_import_legacy_keys --report`, then `--check`). `norole` is role-less only on a seeded DB — migration 0002
   grants Manager to staff that exist at migrate time.
+- The storefront's newsletter key is `AGREEMENTS_API_KEY` (`.env`, default in `docker-compose.yml`): `migrate` imports
+  it as an `agreements.subscribe` token and `make pwa` bakes it into the storefront. A changed value needs the service
+  recreated (`make dev` or `make up`), `make migrate` and `make pwa`; the old token stays until it is revoked.
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
 - `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
   service default is staff-only. `DRF_NUM_PROXIES = 0` there (no proxy, `REMOTE_ADDR` only); unset fails `check --deploy` with `volkanos.E001`.
