@@ -244,6 +244,11 @@ STOREFRONT_BASE_URL = config("STOREFRONT_BASE_URL", default="http://localhost:31
 if _enabled("django_agreements"):
     AGREEMENTS_API_KEY = config("AGREEMENTS_API_KEY", default="zeno-dev-only-newsletter-subscribe-key")
 
+# Thumbnails of product and category pictures (pim-thumbs-generate, run by the seed); unset, the seed skips the step and
+# the API's source_set carries only the original file. Square WebP 90% on white, the sizes of entirius-docker's
+# settings_local (the test package README: 5 sizes, 160-1400 px).
+THUMBS_CONFIG = [(size, size, "resize ratio, white", "webp", 90) for size in (160, 320, 768, 1024, 1400)]
+
 # django_crypt Fernet key (zeno dev-only value).
 CRYPT_SALT = config("CRYPT_SALT", default="rBMA89uk1jFlCu-Z-c_0z2rFENZwx83hRCbIw53eZOg=")
 
