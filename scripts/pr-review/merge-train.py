@@ -24,7 +24,8 @@ from pathlib import Path
 
 WORK = Path.home() / ".cache/pr-review/train"
 APPROVE = os.environ.get(
-    "PR_TRAIN_NOTE", "Approved after the PR sweep: reviewed, and the integration run with every sweep PR is green."
+    "PR_TRAIN_NOTE",
+    "Approved after the PR sweep: reviewed, and the integration run with every sweep PR is green.",
 )
 CONFLICT = re.compile(r"<<<<<<< [^\n]*\n(.*?)=======\n(.*?)>>>>>>> [^\n]*\n", re.DOTALL)
 
@@ -34,23 +35,48 @@ def run(*cmd, cwd=None, check=True):
 
 
 def join_changelog(path: Path) -> None:
-    """Both sides of each conflict, headings once, blank lines collapsed."""
+    """Both sides of each conflict, section by section: a heading once, every entry under its own heading."""
+
+    def sections(text):
+        order, body, current = [], {}, None
+        for line in text.splitlines():
+            if line.startswith("#"):
+                current = line
+                if current not in body:
+                    order.append(current)
+                    body[current] = []
+                continue
+            body.setdefault(current, [])
+            if current is None and None not in order:
+                order.insert(0, None)
+            body[current].append(line)
+        return order, body
+
+    def trimmed(lines):
+        out = []
+        for line in lines:
+            if not line.strip() and (not out or not out[-1].strip()):
+                continue
+            out.append(line)
+        while out and not out[-1].strip():
+            out.pop()
+        return out
 
     def joined(match):
-        out, seen, skipped = [], set(), False
-        for line in (match.group(1) + match.group(2)).splitlines():
-            if line.startswith("#") and line in seen:
-                skipped = True
-                continue
-            if skipped and not line.strip():
-                continue
-            skipped = False
-            if line.startswith("#"):
-                seen.add(line)
-            if line.startswith("- ") and out and not out[-1].strip() and len(out) > 1 and out[-2].startswith("- "):
-                out.pop()
-            if line.strip() or (out and out[-1].strip()):
-                out.append(line)
+        order, body = sections(match.group(1))
+        for heading in sections(match.group(2))[0]:
+            if heading not in body:
+                order.append(heading)
+                body[heading] = []
+        theirs = sections(match.group(2))[1]
+        out = []
+        for heading in order:
+            entries = trimmed(body.get(heading, [])) + trimmed(
+                theirs.get(heading, []) if heading in theirs else []
+            )
+            if heading is not None:
+                out += [heading, ""]
+            out += entries + ([""] if entries else [])
         return "\n".join(out).rstrip("\n") + "\n\n"
 
     path.write_text(CONFLICT.sub(joined, path.read_text()))
@@ -61,7 +87,9 @@ def update_branch(wt: Path) -> bool:
     before = run("git", "rev-parse", "HEAD", cwd=wt).stdout.strip()
     merged = run("git", "merge", "--no-edit", "origin/develop", cwd=wt, check=False)
     if merged.returncode:
-        files = run("git", "diff", "--name-only", "--diff-filter=U", cwd=wt).stdout.split()
+        files = run(
+            "git", "diff", "--name-only", "--diff-filter=U", cwd=wt
+        ).stdout.split()
         if set(files) - {"CHANGELOG.md"}:
             raise SystemExit(f"conflict outside CHANGELOG.md: {files}")
         join_changelog(wt / "CHANGELOG.md")
@@ -84,37 +112,84 @@ def wait_checks(repo: str, pr: str) -> None:
 
 def merge_one(clone: str, repo: str, spec: str) -> None:
     pr, _, who = spec.partition(":")
-    info = json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "headRefName,state").stdout)
+    info = json.loads(
+        run("gh", "pr", "view", pr, "-R", repo, "--json", "headRefName,state").stdout
+    )
     if info["state"] == "MERGED":
         print(f"{repo}#{pr} already merged", flush=True)
         return
     head, wt = info["headRefName"], WORK / f"{repo.split('/')[1]}-{pr}"
     run("git", "-C", clone, "fetch", "-q", "origin")
-    run("git", "-C", clone, "worktree", "add", "-q", "-B", f"train/{pr}", str(wt), f"origin/{head}")
+    run(
+        "git",
+        "-C",
+        clone,
+        "worktree",
+        "add",
+        "-q",
+        "-B",
+        f"train/{pr}",
+        str(wt),
+        f"origin/{head}",
+    )
     try:
         if who == "team":
             run("gh", "pr", "review", pr, "-R", repo, "--approve", "--body", APPROVE)
         for attempt in range(4):
-            if json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout)["state"] == "MERGED":
+            if (
+                json.loads(
+                    run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout
+                )["state"]
+                == "MERGED"
+            ):
                 break  # a merge call that reported an error can still have merged
             run("git", "fetch", "-q", "origin", cwd=wt)
             if update_branch(wt):
-                run("git", "push", f"https://github.com/{repo}.git", f"HEAD:{head}", cwd=wt)
+                run(
+                    "git",
+                    "push",
+                    f"https://github.com/{repo}.git",
+                    f"HEAD:{head}",
+                    cwd=wt,
+                )
             local = run("git", "rev-parse", "HEAD", cwd=wt).stdout.strip()
-            for _ in range(20):  # the PR must point at what was pushed before its checks mean anything
-                pr_head = json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "headRefOid").stdout)["headRefOid"]
+            for _ in range(
+                20
+            ):  # the PR must point at what was pushed before its checks mean anything
+                pr_head = json.loads(
+                    run(
+                        "gh", "pr", "view", pr, "-R", repo, "--json", "headRefOid"
+                    ).stdout
+                )["headRefOid"]
                 if pr_head == local:
                     break
                 time.sleep(15)
             else:
-                raise SystemExit(f"{repo}#{pr}: PR head {pr_head[:8]} never became {local[:8]} (close/reopen the PR)")
+                raise SystemExit(
+                    f"{repo}#{pr}: PR head {pr_head[:8]} never became {local[:8]} (close/reopen the PR)"
+                )
             wait_checks(repo, pr)
-            if run("gh", "pr", "merge", pr, "-R", repo, "--merge", "--admin", check=False).returncode == 0:
+            if (
+                run(
+                    "gh",
+                    "pr",
+                    "merge",
+                    pr,
+                    "-R",
+                    repo,
+                    "--merge",
+                    "--admin",
+                    check=False,
+                ).returncode
+                == 0
+            ):
                 break
             time.sleep(30)  # GitHub still computing mergeability, or a transient 502
         else:
             raise SystemExit(f"{repo}#{pr}: merge refused 4 times")
-        state = json.loads(run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout)["state"]
+        state = json.loads(
+            run("gh", "pr", "view", pr, "-R", repo, "--json", "state").stdout
+        )["state"]
         print(f"{repo}#{pr} {state}", flush=True)
     finally:
         run("git", "-C", clone, "worktree", "remove", "--force", str(wt), check=False)
