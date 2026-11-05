@@ -3,7 +3,7 @@
 #   release-module.sh <clone> <owner/repo> <version> [<dist> for PyPI check]
 # chore: release on develop -> PR develop->master (merge --admin) -> tag -> gh release -> publish.yml -> PyPI.
 set -euo pipefail
-clone=$1 repo=$2 V=$3 dist=${4:-$(basename "$repo")}
+clone=$(realpath "$1") repo=$2 V=$3 dist=${4:-$(basename "$repo")}
 D=$(date +%F) W=~/.cache/pr-review/release/$(basename "$repo") N=~/.cache/pr-review/release/notes-$(basename "$repo").md
 mkdir -p ~/.cache/pr-review/release
 git -C "$clone" fetch -q origin

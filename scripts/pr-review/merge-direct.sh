@@ -5,7 +5,7 @@
 # module suite when develop moved past the branch's base, push HEAD:develop over https, verify origin/develop.
 set -euo pipefail
 export ZENO_PR_REVIEW="$(cd "$(dirname "$0")" && pwd)"
-clone=$1 repo=$2 summary=$3; shift 3
+clone=$(realpath "$1") repo=$2 summary=$3; shift 3
 W=~/.cache/pr-review/direct/$(basename "$repo")
 for branch in "$@"; do
   git -C "$clone" fetch -q origin
