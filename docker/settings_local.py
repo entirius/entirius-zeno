@@ -165,6 +165,9 @@ AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
 # Dev-only outage switch (django_utils.toolbox.outage): communicator `test/toolbox-outage/` fails every toolbox
 # call as a refused connection — `@toolbox-down` BDD simulates an outage without stopping the toolbox.
 AI_TOOLBOX_TEST_SWITCH = True
+# Reply intent classification (T4): off when the toolbox is off; `fake` is the model id of outbound/checks/toolbox_stub.py,
+# a real toolbox needs its own model id in the environment.
+COMMUNICATOR_REPLY_INTENT_MODEL = config("COMMUNICATOR_REPLY_INTENT_MODEL", default="fake")
 
 # Leads platform: rotation, retention and form consent keys the funnel relies on.
 LEADS_ROTATION_MAX = 2
@@ -182,6 +185,8 @@ CELERY_BEAT_SCHEDULE = {
     "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
     # After a toolbox outage: transiently failed drafts / intel analyses retried once the toolbox answers.
     "communicator-retry-drafts": {"task": "django_communicator.retry_failed_drafts", "schedule": 600},
+    # T4: reminders and resume after an out-of-office reply (next step per reply intent class).
+    "communicator-reply-followups": {"task": "django_communicator.process_reply_followups", "schedule": 300},
     "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
     "siteintel-sweep-stuck": {"task": "django_siteintel.sweep_stuck_audits", "schedule": crontab(minute="*/10")},
     "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
