@@ -165,6 +165,20 @@ AI_TOOLBOX_CHANNEL = config("AI_TOOLBOX_CHANNEL", default="zeno-test")
 # Dev-only outage switch (django_utils.toolbox.outage): communicator `test/toolbox-outage/` fails every toolbox
 # call as a refused connection — `@toolbox-down` BDD simulates an outage without stopping the toolbox.
 AI_TOOLBOX_TEST_SWITCH = True
+# Reply intent classification (T4): off when the toolbox is off; `fake` is the model id of outbound/checks/toolbox_stub.py,
+# a real toolbox needs its own model id in the environment.
+COMMUNICATOR_REPLY_INTENT_MODEL = config("COMMUNICATOR_REPLY_INTENT_MODEL", default="fake")
+
+# Outbound glue (leads <-> communicator), all OFF until the environment sets them (wave 3 switches them on):
+# - COMMUNICATOR_PRESEND_CHECK: callable run right before each send; an invalid address ends the message
+#   `failed/presend_check`. Use "django_leads.services.verification_service.presend_check".
+# - COMMUNICATOR_UNSUBSCRIBE_BASE_URL: public base URL of the host serving the communicator routes (dev: the API on
+#   :8100); set = List-Unsubscribe headers + link in every mail. Needed by the unsubscribe BDD scenario.
+# - LEADS_VERIFY_ENABLED: DNS/MX address checks before drafting and in the daily task. Stays False while BDD data uses
+#   `.test` domains (NXDOMAIN); a stored `invalid` (hard bounce, disposable) blocks regardless.
+COMMUNICATOR_PRESEND_CHECK = config("COMMUNICATOR_PRESEND_CHECK", default="")
+COMMUNICATOR_UNSUBSCRIBE_BASE_URL = config("COMMUNICATOR_UNSUBSCRIBE_BASE_URL", default="")
+LEADS_VERIFY_ENABLED = config("LEADS_VERIFY_ENABLED", default=False, cast=bool)
 
 # Leads platform: rotation, retention and form consent keys the funnel relies on.
 LEADS_ROTATION_MAX = 2
@@ -182,12 +196,15 @@ CELERY_BEAT_SCHEDULE = {
     "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
     # After a toolbox outage: transiently failed drafts / intel analyses retried once the toolbox answers.
     "communicator-retry-drafts": {"task": "django_communicator.retry_failed_drafts", "schedule": 600},
+    # T4: reminders and resume after an out-of-office reply (next step per reply intent class).
+    "communicator-reply-followups": {"task": "django_communicator.process_reply_followups", "schedule": 300},
     "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
     "siteintel-sweep-stuck": {"task": "django_siteintel.sweep_stuck_audits", "schedule": crontab(minute="*/10")},
     "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
     "leads-retry-analyses": {"task": "django_leads.retry_failed_analyses", "schedule": 600},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
+    "leads-reverify-addresses": {"task": "django_leads.reverify_addresses", "schedule": crontab(hour=3, minute=30)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
     # Work queue: expired leases back to the queue, stalled work escalated, consumers restarted after a crash.
     "enrichment-reap": {"task": "enrichment.reap", "schedule": 60},
