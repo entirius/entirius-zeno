@@ -1,0 +1,42 @@
+name: Funnel BDD
+
+# The lead funnel and the outbound scenarios on every PR: seed (~11 min) + a tag-filtered behave run (~1 min).
+# AI_TOOLBOX_ENABLED=0 (the repo default): `@needs-toolbox` scenarios are skipped, no secret is needed.
+# Add a new outbound tag to OUTBOUND_TAGS when its scenario lands in the test package.
+on:
+  pull_request:
+    branches: [master, develop]
+
+concurrency:
+  group: funnel-bdd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OUTBOUND_TAGS: "@outbound,@outbound-b,@outbound-b-edge,@outbound-q3,@outbound-q3l,@outbound-q4,@outbound-q5,@outbound-q6,@outbound-q7,@outbound-t4,@outbound-glue"
+
+jobs:
+  funnel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: make init
+      - run: make clone-tests
+      - run: make build
+      - run: make up
+      - name: wait for db, migrate
+        run: |
+          for i in $(seq 1 24); do
+            docker compose exec -T db pg_isready -U entirius && break
+            sleep 5
+          done
+          make migrate
+      - run: make mail
+      - name: seed
+        run: make seed
+      - name: bdd funnel and outbound
+        run: make bdd TAGS="@funnel,${OUTBOUND_TAGS}"
+      - name: service log on failure
+        if: failure()
+        run: docker compose logs --tail=200 service worker
