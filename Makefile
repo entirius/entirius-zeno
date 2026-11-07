@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe pr-inventory
+.PHONY: toolbox-stub hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe pr-inventory
 .DEFAULT_GOAL := help
 
 -include .env
@@ -315,6 +315,9 @@ mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and wait until it is
 	for i in $$(seq 30); do curl -fsS -o /dev/null --max-time 2 $$url 2>/dev/null && break; \
 		[ $$i -eq 30 ] && { echo "greenmail not ready after 30s - docker compose logs greenmail"; exit 1; }; sleep 1; done
 	@$(MAKE) --no-print-directory urls
+
+toolbox-stub:  ## Run a local AI toolbox stand-in on :8300 for CMS e2e (no AI; ends the 503 on usage/month), see .env.example
+	@python3 scripts/toolbox-stub/toolbox_stub.py $${TOOLBOX_STUB_PORT:-8300}
 
 toolbox-check:  ## Verify the AI toolbox answers for AI_TOOLBOX_CHANNEL and exposes only fake models
 	@sh scripts/toolbox-check.sh
