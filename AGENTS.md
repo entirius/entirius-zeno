@@ -70,7 +70,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1264 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-10-10; was 696 before `@access`) | ~4 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1279 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-11-11 on the develop clones with pim 3.7.0, one fresh seed) | ~4 min |
 | `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1265 passed / 0 failed / 29 skipped (`@needs-toolbox` skipped; re-measured 2026-11-04 on the develop clones, two fresh seeds) | ~3.5 min |
 | `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507 passed); re-runnable, not one-shot (re-measured 2026-10-10) | ~1 min |
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
