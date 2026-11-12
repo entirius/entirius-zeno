@@ -97,6 +97,12 @@ services:
       # Storefront newsletter key (AGREEMENTS_API_KEY in docker/settings_local.py): migrate imports it as an access
       # token; the pwa build below bakes the same value into the storefront.
       AGREEMENTS_API_KEY: ${AGREEMENTS_API_KEY:-zeno-dev-only-newsletter-subscribe-key}
+      # Storefront back-in-stock key (STOCK_ALERTS_API_KEY in docker/settings_local.py): the seed stores it as an access
+      # token with the scope stock_alerts.subscribe; the pwa build below bakes the same value into the storefront.
+      STOCK_ALERTS_API_KEY: ${STOCK_ALERTS_API_KEY:-zeno-dev-only-stock-alerts-subscribe-key}
+      # Links and pictures of the e-mails (docker/settings_local.py): the host ports of the storefront and the service.
+      STOREFRONT_BASE_URL: http://localhost:${PWA_PORT:-3100}
+      EMAIL_MEDIA_BASE_URL: http://localhost:${SERVICE_PORT:-8100}/
       # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
       RECIPE: ${RECIPE:-}
     extra_hosts:
@@ -121,10 +127,14 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.pwa
+      # make pwa PWA_SRC=local sets it to the clone's .git; any directory otherwise (not read).
+      additional_contexts:
+        local_git: ${PWA_LOCAL_GIT:-docker}
       args:
         repo: entirius-pwa-storefront
         branch: ${PWA_BRANCH:-develop}
         ref: ${PWA_REF:-unknown}
+        source: ${PWA_SRC:-github}
         # One URL serves both callers (server components in the container, browser
         # on the host), so it has to be the host one — the container forwards that
         # port to the service (Dockerfile.pwa CMD).
@@ -132,6 +142,7 @@ services:
         channel: ${PWA_CHANNEL:-default-europe}
         checkout_key: ${CHECKOUT_API_KEY:-entirius-docker-checkout-dev-key-2026}
         newsletter_key: ${AGREEMENTS_API_KEY:-zeno-dev-only-newsletter-subscribe-key}
+        stock_alerts_key: ${STOCK_ALERTS_API_KEY:-zeno-dev-only-stock-alerts-subscribe-key}
     profiles: [pwa]
     ports:
       - "${PWA_PORT:-3100}:3000"
@@ -296,6 +307,9 @@ services:
       OUTREACH_SMTP_FROM: ${OUTREACH_SMTP_FROM:-outreach@greenmail.test}
       # Required with a real OUTREACH_SMTP_HOST: every recipient of every mail is rewritten to it.
       ZENO_MAIL_REDIRECT_TO: ${ZENO_MAIL_REDIRECT_TO:-}
+      # The worker sends the e-mails: same links and pictures as the service.
+      STOREFRONT_BASE_URL: http://localhost:${PWA_PORT:-3100}
+      EMAIL_MEDIA_BASE_URL: http://localhost:${SERVICE_PORT:-8100}/
       # Recipe (recipes/<name>/): the enabled modules and the worker queues; unset = shop.
       RECIPE: ${RECIPE:-}
     extra_hosts:
