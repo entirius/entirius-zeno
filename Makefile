@@ -237,8 +237,12 @@ smoke:  ## Boot proof: migrations, system check, admin + API over HTTP, session 
 	@$(MAKE) --no-print-directory health
 	@sh scripts/smoke.sh
 
-pwa:  ## Start the storefront (build from GitHub on first run)
-	@$(call REF,entirius-pwa-storefront,$${PWA_BRANCH:-develop}); \
+PWA_LOCAL_CLONE = repos/pwa/entirius-pwa-storefront
+pwa:  ## Start the storefront (build from GitHub on first run; PWA_SRC=local = the commits of repos/pwa/entirius-pwa-storefront)
+	@if [ "$${PWA_SRC:-github}" = local ]; then \
+		ref=$$(git -C $(PWA_LOCAL_CLONE) rev-parse --verify "$${PWA_BRANCH:-develop}^{commit}") || exit 1; \
+		export PWA_LOCAL_GIT=$(PWA_LOCAL_CLONE)/.git; \
+	else $(call REF,entirius-pwa-storefront,$${PWA_BRANCH:-develop}); fi; \
 	export PWA_REF=$$ref; $(COMPOSE) $(PROFILES) --profile pwa build $(BUILD_ARGS) pwa && \
 	$(COMPOSE) $(PROFILES) --profile pwa up -d pwa
 	@$(MAKE) --no-print-directory urls
@@ -303,12 +307,14 @@ seed:  ## Seed the service with the Emporium test package (fixtures + full impor
 bdd:  ## Run the BDD suite against the running service (TAGS=@tag optional)
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
+	SERVICE_CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q service) \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) bdd TAGS=$(TAGS)
 
 e2e:  ## Run Playwright e2e (storefront + CMS) against the running frontends
 	@API_BASE_URL=http://localhost:$${SERVICE_PORT:-8100} \
 	CMS_BASE_URL=http://localhost:$${CMS_PORT:-8180} \
 	E2E_DEVICE="$(E2E_DEVICE)" \
+	SERVICE_CONTAINER=$$($(COMPOSE) $(PROFILES) ps -q service) \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100} E2E_ARGS="$(E2E_ARGS)"
 
 mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and the Mailpit viewer, wait until both are ready
