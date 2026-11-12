@@ -21,6 +21,7 @@ SERVICES = [
     ("docs-alt", 4321, "Docs portal (branch)", "/"),
     ("www", 3000, "entirius.com (www)", "/"),
     ("embed", 7997, "Embedding service", "/docs"),
+    ("mailpit", 8025, "Mail viewer (Mailpit)", "/"),
     ("rabbitmq", 15672, "RabbitMQ", "/"),
 ]
 

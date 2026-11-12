@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe pr-inventory
+.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail mail-look mail-check toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe pr-inventory
 .DEFAULT_GOAL := help
 
 -include .env
@@ -9,7 +9,7 @@ COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROFILES = --profile infra --profile service
 # pwa/cms are opt-in (started by their own targets), but teardown and introspection
 # must always see the whole stack — otherwise frontends outlive `down`/`clean`.
-ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile cms-s2 --profile docs --profile www --profile embed
+ALL_PROFILES = $(PROFILES) --profile pwa --profile cms --profile cms-s2 --profile docs --profile www --profile embed --profile mail
 # Embedding service: EMBED_GPU=1 layers the CUDA + GPU (CDI) override on the dev compose.
 # Auto-detected from the CDI spec; .env or the command line override it.
 EMBED_GPU ?= $(shell test -f /etc/cdi/nvidia.yaml && echo 1 || echo 0)
@@ -201,6 +201,8 @@ urls:  ## URLs and ports of running services
 	[ -n "$$p" ] && { echo "  embed        http://localhost:$$p  (embeddings; /docs, /models)"; up=1; }; \
 	p=$$($(COMPOSE) port greenmail 8080 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  greenmail    http://localhost:$$p  (REST; SMTP $$($(COMPOSE) port greenmail 3025 | cut -d: -f2), IMAP $$($(COMPOSE) port greenmail 3143 | cut -d: -f2); sandbox/sandbox)"; up=1; }; \
+	p=$$($(COMPOSE) --profile mail port mailpit 8025 2>/dev/null | cut -d: -f2); \
+	[ -n "$$p" ] && { echo "  mailpit      http://localhost:$$p  (viewer + HTML check; make mail-look copies GreenMail in, SMTP $$($(COMPOSE) --profile mail port mailpit 1025 | cut -d: -f2))"; up=1; }; \
 	p=$$($(COMPOSE) port db 5432 2>/dev/null | cut -d: -f2); \
 	[ -n "$$p" ] && { echo "  postgres     localhost:$$p  ($${POSTGRES_USER:-entirius}/$${POSTGRES_PASSWORD:-entirius-dev}, db: $${POSTGRES_DB:-entirius})"; up=1; }; \
 	p=$$($(COMPOSE) port redis 6379 2>/dev/null | cut -d: -f2); \
@@ -309,12 +311,28 @@ e2e:  ## Run Playwright e2e (storefront + CMS) against the running frontends
 	E2E_DEVICE="$(E2E_DEVICE)" \
 	$(MAKE) --no-print-directory -C $(TESTS_PATH)/$(TESTS_REPO) e2e E2E_BASE_URL=http://localhost:$${PWA_PORT:-3100} E2E_ARGS="$(E2E_ARGS)"
 
-mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and wait until it is ready
-	@$(COMPOSE) $(PROFILES) up -d greenmail
-	@url=http://localhost:$${GREENMAIL_API_PORT:-8380}/api/service/readiness; \
+mail:  ## Start the GreenMail mail sandbox (SMTP/IMAP/REST) and the Mailpit viewer, wait until both are ready
+	@$(COMPOSE) $(PROFILES) --profile mail up -d greenmail mailpit
+	@for url in http://localhost:$${GREENMAIL_API_PORT:-8380}/api/service/readiness \
+		http://localhost:$${MAILPIT_UI_PORT:-8125}/readyz; do \
 	for i in $$(seq 30); do curl -fsS -o /dev/null --max-time 2 $$url 2>/dev/null && break; \
-		[ $$i -eq 30 ] && { echo "greenmail not ready after 30s - docker compose logs greenmail"; exit 1; }; sleep 1; done
+		[ $$i -eq 30 ] && { echo "$$url not ready after 30s - docker compose logs greenmail mailpit"; exit 1; }; sleep 1; done; done
 	@$(MAKE) --no-print-directory urls
+
+# GreenMail stays the sandbox of the stack and of BDD; Mailpit only receives copies for looking.
+MAIL_LOOK = GREENMAIL_API_URL=http://localhost:$${GREENMAIL_API_PORT:-8380} \
+	MAILPIT_URL=http://localhost:$${MAILPIT_UI_PORT:-8125} MAILPIT_SMTP_PORT=$${MAILPIT_SMTP_PORT:-1125} \
+	python3 scripts/mail-look.py --limit $${MAIL_LOOK_LIMIT:-50}
+mail-look:  ## Copy the newest GreenMail messages into Mailpit and print its URL (MAIL_LOOK_LIMIT, default 50)
+	@$(MAIL_LOOK)
+
+# Samples of every email type first, and only their mailbox is checked, so the result never depends on what BDD left.
+# MAIL_CHECK_SEND=0 skips the samples and checks the newest messages of every mailbox instead.
+mail-check:  ## Every email type to GreenMail, mail-look, Mailpit HTML check: red on an unsupported feature not allowlisted (MAIL_CHECK_SUBJECT)
+	@[ "$(MAIL_CHECK_SEND)" = "0" ] || $(COMPOSE) $(PROFILES) exec -T -e MAIL_CHECK_CHANNEL=$${PWA_CHANNEL:-default-europe} \
+		service python manage.py shell < scripts/mail-check-send.py
+	@$(MAIL_LOOK) --check --subject "$(MAIL_CHECK_SUBJECT)" \
+		$(if $(filter 0,$(MAIL_CHECK_SEND)),,--user mail-check@greenmail.test)
 
 toolbox-check:  ## Verify the AI toolbox answers for AI_TOOLBOX_CHANNEL and exposes only fake models
 	@sh scripts/toolbox-check.sh
