@@ -17,7 +17,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
 | `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
-| `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |
+| `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here — and the Mailpit viewer next to it (UI + API :8125, SMTP :1125, loopback only); waits for both |
+| `make mail-look` / `mail-check` | copy the newest GreenMail messages (`MAIL_LOOK_LIMIT`, 50) into an emptied Mailpit and print its URL; `mail-check` sends one sample of every `django_email` type in every language to its own mailbox and checks only that one (`MAIL_CHECK_SEND=0` = no samples, the newest messages of every mailbox), red when Mailpit's HTML check finds a feature some mail client does not support for a message whose subject matches `MAIL_CHECK_SUBJECT` (regex, default every message), unless `scripts/mail-check-allowlist.txt` names it with a reason |
 | `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
 | `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`) |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
@@ -70,7 +71,9 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1279 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-11-11 on the develop clones with pim 3.7.0, one fresh seed) | ~4 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1291 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-11-12 with the email and checkout order-e-mail branches mounted, after two `@order-mail` runs, one fresh seed) | ~4 min |
+| `make bdd TAGS=@order-mail` (dev mode, fresh seed, `make mail`) | 12 passed, twice in a row on one database (measured 2026-11-12); the first run after a seed waits up to a minute per e-mail while the worker drains the seed's tasks | ~1.5 min first, ~15 s after |
+| `make mail-check` (`make mail`) | 32 HTML messages checked (16 types × 2 languages), 0 outside the allowlist (measured 2026-11-12) | ~5 s |
 | `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1265 passed / 0 failed / 29 skipped (`@needs-toolbox` skipped; re-measured 2026-11-04 on the develop clones, two fresh seeds) | ~3.5 min |
 | `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507 passed); re-runnable, not one-shot (re-measured 2026-10-10) | ~1 min |
 | `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
@@ -134,6 +137,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   needs `make pwa` again.
 - First `make e2e` needs `uv run --extra e2e playwright install chromium` in the
   test-package clone (host side).
+- Mailpit is for looking only: the stack sends to GreenMail and BDD reads GreenMail; Mailpit gets copies from
+  `make mail-look` and is emptied by every copy.
 - GreenMail is purged by seed, not by scenarios — a scenario that needs an empty mailbox purges in its own
   `Background` (`Given the sandbox mailbox is empty`); never rely on scenario order.
 - `@toolbox-down` simulates an outage with communicator `test/toolbox-outage/` (`AI_TOOLBOX_TEST_SWITCH` in
