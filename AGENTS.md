@@ -71,8 +71,9 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1291 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-11-12 with the email and checkout order-e-mail branches mounted, after two `@order-mail` runs, one fresh seed) | ~4 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1302 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-11-12 with the stock-alerts branches mounted, after two `@stock-alerts` runs, one fresh seed) | ~5.5 min |
 | `make bdd TAGS=@order-mail` (dev mode, fresh seed, `make mail`) | 12 passed, twice in a row on one database (measured 2026-11-12); the first run after a seed waits up to a minute per e-mail while the worker drains the seed's tasks | ~1.5 min first, ~15 s after |
+| `make bdd TAGS=@stock-alerts` (dev mode, fresh seed, `make mail`) | 11 passed, twice in a row on one database (measured 2026-11-12) | ~3 min |
 | `make mail-check` (`make mail`) | 32 HTML messages checked (16 types × 2 languages), 0 outside the allowlist (measured 2026-11-12) | ~5 s |
 | `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1265 passed / 0 failed / 29 skipped (`@needs-toolbox` skipped; re-measured 2026-11-04 on the develop clones, two fresh seeds) | ~3.5 min |
 | `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507 passed); re-runnable, not one-shot (re-measured 2026-10-10) | ~1 min |
@@ -80,6 +81,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
+| `make e2e E2E_ARGS="e2e/storefront e2e/mail"` (`make pwa PWA_SRC=local PWA_BRANCH=feature/stock-alerts`, `make mail`, fresh seed) | 6 passed; the stock-alert e-mail screenshots in the test package's `test-results/stock-alerts/` (measured 2026-11-12) | ~1.5 min |
 | `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
 | `make e2e E2E_ARGS="e2e/cms/ -k ai_studio"` (`make cms-dev`, `CMS_BASE_URL=http://localhost:8080` to the test-package make, fake toolbox) | 33 passed (measured 2026-10-15, twice) | ~6 min |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
@@ -179,6 +181,13 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - The storefront's newsletter key is `AGREEMENTS_API_KEY` (`.env`, default in `docker-compose.yml`): `migrate` imports
   it as an `agreements.subscribe` token and `make pwa` bakes it into the storefront. A changed value needs the service
   recreated (`make dev` or `make up`), `make migrate` and `make pwa`; the old token stays until it is revoked.
+- The storefront's back-in-stock key is `STOCK_ALERTS_API_KEY` (`.env`, default in `docker-compose.yml`): the seed
+  stores it as a `stock_alerts.subscribe` token (access imports only `AGREEMENTS_API_KEY` from settings) and `make pwa`
+  bakes it into the storefront. A changed value needs the service recreated (`make dev`), `make seed`
+  and `make pwa`. The `@stock-alerts` steps and the stock-alert e2e run the restock check in the service container
+  (`make bdd` / `make e2e` pass `SERVICE_CONTAINER`); the alert links point at `STOREFRONT_BASE_URL` (the `PWA_PORT`)
+  and the e-mail pictures at `EMAIL_MEDIA_BASE_URL` (the `SERVICE_PORT`). A storefront branch not on GitHub yet builds
+  from the local clone's commits: `make pwa PWA_SRC=local PWA_BRANCH=<branch>`.
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
 - `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
   service default is staff-only. `DRF_NUM_PROXIES = 0` there (no proxy, `REMOTE_ADDR` only); unset fails `check --deploy` with `volkanos.E001`.
