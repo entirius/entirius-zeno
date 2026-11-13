@@ -71,18 +71,19 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1302 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-11-12 with the stock-alerts branches mounted, after two `@stock-alerts` runs, one fresh seed) | ~5.5 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1360 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-13 with the leads-crm branches mounted, after one `@crm` run, one fresh seed; the extra skip is a `@blocked-by-module` funnel scenario) | ~6.5 min |
+| `make bdd TAGS=@crm` (dev mode, fresh seed, `make mail`) | 58 passed / 0 failed / 1 skipped (`@blocked-by-module`), twice in a row on one database (measured 2026-11-13) | ~1.5 min |
 | `make bdd TAGS=@order-mail` (dev mode, fresh seed, `make mail`) | 12 passed, twice in a row on one database (measured 2026-11-12); the first run after a seed waits up to a minute per e-mail while the worker drains the seed's tasks | ~1.5 min first, ~15 s after |
 | `make bdd TAGS=@stock-alerts` (dev mode, fresh seed, `make mail`) | 11 passed, twice in a row on one database (measured 2026-11-12) | ~3 min |
 | `make mail-check` (`make mail`) | 32 HTML messages checked (16 types × 2 languages), 0 outside the allowlist (measured 2026-11-12) | ~5 s |
-| `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1265 passed / 0 failed / 29 skipped (`@needs-toolbox` skipped; re-measured 2026-11-04 on the develop clones, two fresh seeds) | ~3.5 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1346 passed / 0 failed / 30 skipped (`@needs-toolbox` and one `@blocked-by-module` skipped; `@crm` passes in full; re-measured 2026-11-13 with the leads-crm branches mounted, one fresh seed) | ~6 min |
 | `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507 passed); re-runnable, not one-shot (re-measured 2026-10-10) | ~1 min |
-| `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
+| `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed (re-measured 2026-11-13) | ~10 s |
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
 | `make e2e E2E_ARGS="e2e/storefront e2e/mail"` (`make pwa PWA_SRC=local PWA_BRANCH=feature/stock-alerts`, `make mail`, fresh seed) | 6 passed; the stock-alert e-mail screenshots in the test package's `test-results/stock-alerts/` (measured 2026-11-12) | ~1.5 min |
-| `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
+| `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-11-13) | ~45 s |
 | `make e2e E2E_ARGS="e2e/cms/ -k ai_studio"` (`make cms-dev`, `CMS_BASE_URL=http://localhost:8080` to the test-package make, fake toolbox) | 33 passed (measured 2026-10-15, twice) | ~6 min |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
 | `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1265 passed / 0 failed / 29 skipped (measured 2026-11-04 on `release/4.2.0`) | 19 min |
@@ -189,6 +190,25 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   and the e-mail pictures at `EMAIL_MEDIA_BASE_URL` (the `SERVICE_PORT`). A storefront branch not on GitHub yet builds
   from the local clone's commits: `make pwa PWA_SRC=local PWA_BRANCH=<branch>`.
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
+- The CRM has two communicator mailboxes, created by the seed (test package `scripts/seed-crm.py`): `manager`'s
+  (`sales1@greenmail.test`, the channel default, GreenMail login `sandbox`) and `editor`'s (`sales2@greenmail.test`,
+  login `sales2`, a declared GreenMail user). Mail of a company leaves from its owner's mailbox, else the default one.
+  Mailboxes always speak TLS, which GreenMail offers only on SMTPS 3465 with a self-signed certificate: the mailboxes
+  point there and `docker/settings_local.py` sets `GreenMailBackend`, which skips certificate checks for the
+  `greenmail` host only. The channel stays in sandbox mode, so every mail still lands in `sandbox@greenmail.test`.
+- `COMMUNICATOR_UNSUBSCRIBE_BASE_URL` is the service of the stack (`http://localhost:${SERVICE_PORT}`, compose passes
+  it): every outbound mail carries the one-click unsubscribe headers and link. Empty = no link, no headers.
+- Reply classes come through communicator's development endpoint `test/ingest-reply/` (`intent`, `confidence`,
+  `return_date`): the fake toolbox has no reply-class answer and no reply class profile is seeded, so `@crm` passes
+  with `AI_TOOLBOX_ENABLED=0` as well.
+- The seed leaves the follow-up sequence's `autostart` off: switched on for the whole channel it gives every first
+  mail of the older features a follow-up sequence. The `@crm` scenarios switch it on and off themselves.
+- The CMS shows the CRM screens only when munin reports leads and communicator at 0.5.0 or later
+  (`isModuleAtLeast`); munin reads the installed package version, so mounted clones still at 0.4.x hide them until
+  the module releases bump the versions.
+- Live sending exists only in production (`channel_service.live_allowed`), so the beat never runs communicator's
+  automatic pause here; `@crm` runs the health check once in the service container on the channel set to live in
+  memory.
 - `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
   service default is staff-only. `DRF_NUM_PROXIES = 0` there (no proxy, `REMOTE_ADDR` only); unset fails `check --deploy` with `volkanos.E001`.
 - A variable for one make run goes on the command line (`make build SERVICE_BRANCH=v4.1.0`): the Makefile includes
