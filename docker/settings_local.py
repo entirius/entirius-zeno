@@ -191,6 +191,9 @@ CELERY_BEAT_SCHEDULE = {
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
     # Work queue: expired leases back to the queue, stalled work escalated, consumers restarted after a crash.
     "enrichment-reap": {"task": "enrichment.reap", "schedule": 60},
+    # Back-in-stock alerts: the restock check and the daily retention (BDD runs the check itself).
+    "stock-alerts-check": {"task": "django_stock_alerts.check", "schedule": 300},
+    "stock-alerts-retention": {"task": "django_stock_alerts.retention", "schedule": crontab(hour=3, minute=30)},
 }
 # An entry stays only when the app of its task is enabled. Most task names are `django_<x>.…`; the enrichment
 # tasks are `enrichment.…`, so the prefixes that differ from their app are mapped explicitly.
@@ -243,6 +246,22 @@ STOREFRONT_BASE_URL = config("STOREFRONT_BASE_URL", default="http://localhost:31
 # (access_import_legacy_keys); without it a guest cannot subscribe.
 if _enabled("django_agreements"):
     AGREEMENTS_API_KEY = config("AGREEMENTS_API_KEY", default="zeno-dev-only-newsletter-subscribe-key")
+
+# django_email turns the product pictures of the e-mails into absolute links with this (the service's host port);
+# unset, they go out without a picture.
+EMAIL_MEDIA_BASE_URL = config("EMAIL_MEDIA_BASE_URL", default="http://localhost:8100/")
+
+# Back-in-stock alerts (django_stock_alerts): the e-mail links point at the storefront. The zeno storefront serves the
+# default profile only, whose addresses carry no country segment, so the templates leave {country} out.
+if _enabled("django_stock_alerts"):
+    STOCK_ALERTS_PRODUCT_URL = {"default-europe": f"{STOREFRONT_BASE_URL}/product/{{url_key}}?variant={{sku}}"}
+    STOCK_ALERTS_CANCEL_URL = {"default-europe": f"{STOREFRONT_BASE_URL}/stock-alert/cancel?token={{token}}"}
+    # Two people per available piece and wave: a wave is testable with three requests and one piece.
+    STOCK_ALERTS_WAVE_FACTOR = 2
+    # The key a storefront sends to stock-alerts/v2/<channel>/subscriptions/ (zeno dev-only value; compose passes it to
+    # the service and bakes it into the storefront). The seed stores it as an access token with the publishable scope
+    # stock_alerts.subscribe: access imports only AGREEMENTS_API_KEY from settings.
+    STOCK_ALERTS_API_KEY = config("STOCK_ALERTS_API_KEY", default="zeno-dev-only-stock-alerts-subscribe-key")
 
 # Thumbnails of product and category pictures (pim-thumbs-generate, run by the seed); unset, the seed skips the step and
 # the API's source_set carries only the original file. Square WebP 90% on white, the sizes of entirius-docker's

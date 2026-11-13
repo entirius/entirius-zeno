@@ -17,8 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 # Cache-bust: `ref` carries the remote branch SHA (resolved by the Makefile via
 # git ls-remote) — an ADD of the GitHub API ref proved unreliable (silent cache reuse).
 ARG ref=unknown
-RUN echo "building ${repo}@${branch} (${ref})" \
-    && git clone -b ${branch} --depth 1 https://github.com/entirius/${repo}.git ${APP_DIR}
+# `make pwa PWA_SRC=local`: the branch comes from the commits of the local clone repos/pwa/${repo} (its .git is the
+# build context `local_git`), for a branch not on GitHub yet. Default: GitHub; `local_git` is then not read.
+ARG source=github
+RUN --mount=type=bind,from=local_git,target=/local.git \
+    url=https://github.com/entirius/${repo}.git; [ "${source}" != local ] || url=file:///local.git; \
+    echo "building ${repo}@${branch} (${ref}) from ${source}" \
+    && git -c safe.directory='*' clone -b ${branch} --depth 1 ${url} ${APP_DIR}
 
 WORKDIR ${APP_DIR}
 
@@ -30,6 +35,8 @@ ARG channel=default-europe
 ARG checkout_key=entirius-docker-checkout-dev-key-2026
 # The channel's newsletter key: without it the storefront shows no newsletter form (AGREEMENTS_API_KEY, compose).
 ARG newsletter_key=zeno-dev-only-newsletter-subscribe-key
+# The channel's back-in-stock key: without it a sold-out size offers no "notify me" form (STOCK_ALERTS_API_KEY).
+ARG stock_alerts_key=zeno-dev-only-stock-alerts-subscribe-key
 ENV API_BASE_URL=${api_base_url}
 RUN cp -r _CONFIG.example _CONFIG && node -e "\
 const fs = require('fs'); \
@@ -38,7 +45,7 @@ const rw = (f, fn) => { const p = '_CONFIG/' + f; \
 rw('app.config.json', c => ({ ...c, API_BASE_URL: '${api_base_url}' })); \
 rw('channels.config.json', () => ({ '${channel}': \
   { CHANNEL_LABEL: '${channel}', API_CHECKOUT_KEY: '${checkout_key}', \
-    API_NEWSLETTER_KEY: '${newsletter_key}' } })); \
+    API_NEWSLETTER_KEY: '${newsletter_key}', API_STOCK_ALERTS_KEY: '${stock_alerts_key}' } })); \
 rw('countries.config.json', c => ({ default: \
   { ...c.default, channels: ['${channel}'], default_channel: '${channel}' } })); \
 "

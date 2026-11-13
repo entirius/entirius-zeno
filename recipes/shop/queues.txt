@@ -23,3 +23,4 @@ supplier_images
 supplier_results
 accounts_pull
 matrix_pull
+stock_alerts
