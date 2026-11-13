@@ -7,11 +7,13 @@ and refreshed on every dev-mode start. Change .env on the host, not this file.
 """
 
 import re
+import ssl as _ssl
 from pathlib import Path
 
 import dj_database_url
 from celery.schedules import crontab
 from decouple import Csv, config
+from django.core.mail.backends.smtp import EmailBackend as _SmtpBackend
 
 ENVIRONMENT = "development"
 
@@ -121,18 +123,33 @@ EMAIL_SMTP_CONFIGURATION_CHANNELS = {
         "DEFAULT_FROM_EMAIL": config("OUTREACH_SMTP_FROM", default="outreach@greenmail.test"),
     }
 }
+
+
+class GreenMailBackend(_SmtpBackend):
+    """Communicator mailboxes always speak TLS; GreenMail offers it only on SMTPS (greenmail:3465) with a self-signed
+    certificate. Verification is skipped for the `greenmail` host alone."""
+
+    @property
+    def ssl_context(self):
+        if self.host != "greenmail":
+            return super().ssl_context
+        context = _ssl.create_default_context()
+        context.check_hostname, context.verify_mode = False, _ssl.CERT_NONE
+        return context
+
+
+EMAIL_BACKEND = "main.settings_local.GreenMailBackend"
 # A real server shares that entry with EVERY module on the channel (notifications, contact forms, accounts,
 # checkout …) — the communicator's sandbox mode alone would not stop them. So with a real host, every recipient of
 # every mail is rewritten to ZENO_MAIL_REDIRECT_TO at the transport; without it the service refuses to boot.
 if EMAIL_SMTP_CONFIGURATION_CHANNELS["default-europe"]["EMAIL_HOST"] != "greenmail":
     from django.core.exceptions import ImproperlyConfigured
-    from django.core.mail.backends.smtp import EmailBackend as _SmtpBackend
 
     ZENO_MAIL_REDIRECT_TO = config("ZENO_MAIL_REDIRECT_TO", default="")
     if not ZENO_MAIL_REDIRECT_TO:
         raise ImproperlyConfigured("OUTREACH_SMTP_HOST is a real server: set ZENO_MAIL_REDIRECT_TO in .env")
 
-    class RedirectAllBackend(_SmtpBackend):
+    class RedirectAllBackend(GreenMailBackend):
         """Every recipient becomes ZENO_MAIL_REDIRECT_TO; the original ones travel in X-Zeno-Original-To."""
 
         def send_messages(self, email_messages):
@@ -142,8 +159,8 @@ if EMAIL_SMTP_CONFIGURATION_CHANNELS["default-europe"]["EMAIL_HOST"] != "greenma
             return super().send_messages(email_messages)
 
     EMAIL_BACKEND = "main.settings_local.RedirectAllBackend"
-# No COMMUNICATOR_IMAP_* settings: the communicator reads its Mailbox rows, which the test package's fixture
-# points at greenmail:3025 / 3143 — one per salesperson (`manager`, `editor`), each with its own GreenMail login.
+# No COMMUNICATOR_IMAP_* settings: the communicator reads its Mailbox rows, which the test package's seed points at
+# greenmail:3465 (SMTPS) / 3143 — one per salesperson (`manager`, `editor`), each with its own GreenMail login.
 # The one-click unsubscribe link points at the service of this stack (SERVICE_PORT); empty = no link, no headers.
 COMMUNICATOR_UNSUBSCRIBE_BASE_URL = config("COMMUNICATOR_UNSUBSCRIBE_BASE_URL", default="http://localhost:8100")
 COMMUNICATOR_COMPLAINT_FEEDBACK = True
