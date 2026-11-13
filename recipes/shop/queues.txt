@@ -5,6 +5,7 @@ atlas_images
 atlas_results
 lookup
 notifications_default
+todo_default
 siteintel_default
 pim_pull
 pim_push

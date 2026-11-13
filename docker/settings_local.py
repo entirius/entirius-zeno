@@ -142,8 +142,14 @@ if EMAIL_SMTP_CONFIGURATION_CHANNELS["default-europe"]["EMAIL_HOST"] != "greenma
             return super().send_messages(email_messages)
 
     EMAIL_BACKEND = "main.settings_local.RedirectAllBackend"
-# No COMMUNICATOR_IMAP_* settings: the communicator reads its MailboxConfig row, which the
-# communicator fixture points at greenmail:3143 (sandbox/sandbox, no SSL).
+# No COMMUNICATOR_IMAP_* settings: the communicator reads its Mailbox rows, which the test package's fixture
+# points at greenmail:3025 / 3143 — one per salesperson (`manager`, `editor`), each with its own GreenMail login.
+# The one-click unsubscribe link points at the service of this stack (SERVICE_PORT); empty = no link, no headers.
+COMMUNICATOR_UNSUBSCRIBE_BASE_URL = config("COMMUNICATOR_UNSUBSCRIBE_BASE_URL", default="http://localhost:8100")
+COMMUNICATOR_COMPLAINT_FEEDBACK = True
+COMMUNICATOR_SUPPRESSION_SCOPE = "channel"
+# Address verification (MX lookups) stays off: every BDD address is under `.test`.
+COMMUNICATOR_VERIFY_ENABLED = False
 # Every notifications sink in zeno is a sandbox (GreenMail, blank webhook), so live sends are allowed
 # outside production here only.
 NOTIFICATIONS_ALLOW_LIVE_SENDS = True
@@ -182,6 +188,12 @@ CELERY_BEAT_SCHEDULE = {
     "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
     # After a toolbox outage: transiently failed drafts / intel analyses retried once the toolbox answers.
     "communicator-retry-drafts": {"task": "django_communicator.retry_failed_drafts", "schedule": 600},
+    # Sequences paused until a return date ("out of office", "not now") resume; addresses are checked again.
+    "communicator-resume-paused": {"task": "django_communicator.resume_paused_sequences", "schedule": 3600},
+    "communicator-reverify-addresses": {
+        "task": "django_communicator.reverify_addresses",
+        "schedule": crontab(hour=2, minute=30),
+    },
     "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
     "siteintel-sweep-stuck": {"task": "django_siteintel.sweep_stuck_audits", "schedule": crontab(minute="*/10")},
     "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
@@ -189,6 +201,8 @@ CELERY_BEAT_SCHEDULE = {
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
+    # Tasks: one bell notification to the owner when a task comes due.
+    "todo-remind-due": {"task": "django_todo.remind_due", "schedule": 900},
     # Work queue: expired leases back to the queue, stalled work escalated, consumers restarted after a crash.
     "enrichment-reap": {"task": "enrichment.reap", "schedule": 60},
     # Back-in-stock alerts: the restock check and the daily retention (BDD runs the check itself).
@@ -288,7 +302,7 @@ SCHEMA_TAG_GROUPS: dict[str, tuple[str, ...]] = {
     "Checkout": ("checkout", "deliverypoints"),
     "Customers and Consents": ("accounts", "agreements"),
     "Suppliers and Market Data": ("suppliers", "atlas", "pricefighter"),
-    "Leads and Forms": ("leads", "communicator", "siteintel", "contact-forms"),
+    "Leads and Forms": ("leads", "communicator", "todo", "siteintel", "contact-forms"),
     "Platform": ("access", "munin", "regional", "email", "notifications"),
 }
 
