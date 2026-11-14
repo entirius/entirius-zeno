@@ -236,8 +236,13 @@ Not findings of this round:
 - CMS visual baselines for the Leads screens are not approved yet; `npm run visual:ux` compares nothing for them.
 - `make bdd`: the scenario SA-6 of `@stock-alerts` can fail when the beat's restock check (every five minutes)
   runs in the middle of it; alone it passes.
-- CI on `develop` of `entirius-service-volkanos` is red at the lint step: the service requires
-  `entirius-django-stock-alerts`, which is not on PyPI yet. Dev mode does not care: it installs the clone.
+- Until the module releases, only the developer stack works on `develop`: `make setup` without `DEV=1` builds the
+  service from its lock (leads 0.4.0, no tasks module, no stock alerts) while the recipe already enables the new
+  modules, so it stops at `migrate` with `No module named 'django_todo'`. The `test` job of this repository's CI is
+  red for the same reason, and so is the lint job of `entirius-service-volkanos` (it requires
+  `entirius-django-stock-alerts`, which is not on PyPI yet). Dev mode installs the clones and does not care.
+- CI of `entirius-django-checkout` and `entirius-django-stock-alerts` on `develop` fails on imports from
+  `entirius-django-email`: they need its `develop`, PyPI has the last release.
 
 ## Open questions for the owner
 
