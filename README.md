@@ -65,6 +65,7 @@ access ships in the service lock since service 4.0.0.
 
 - [Testing the platform: first run, seeding, BDD and e2e](https://github.com/entirius/entirius-zeno/blob/develop/doc/howto-test.md)
 - [Developing with the harness: dev mode, commands, configuration](https://github.com/entirius/entirius-zeno/blob/develop/doc/howto-develop.md)
+- [Testing the Leads CRM from develop: setup, what changed, the walk](https://github.com/entirius/entirius-zeno/blob/develop/doc/howto-test-leads-crm.md)
 - [All guides](https://github.com/entirius/entirius-zeno/tree/develop/doc)
 - [Entirius documentation](https://docs.entirius.com/)
 

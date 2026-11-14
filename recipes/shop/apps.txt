@@ -9,6 +9,7 @@ django_atlas
 django_pricefighter
 django_lookup
 django_notifications
+django_todo
 django_siteintel
 django_pim_csv
 django_pim_translator
@@ -42,3 +43,4 @@ django_checkout_import_from_magento_api
 django_getresponse
 django_returns
 django_omnibus
+django_stock_alerts

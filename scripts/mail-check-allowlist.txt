@@ -1,0 +1,14 @@
+# Mailpit HTML-check warnings (caniemail slugs) `make mail-check` accepts: each one is used on purpose by the
+# django_email layout (templates/base/) and degrades to a readable email in the clients that lack it — removing it
+# would break Outlook desktop (MSO) or the phone view. One slug per line; the text after `#` is the reason.
+# A new slug in a check run means a template started using a feature: fix the template or add it here with a reason.
+html-style         # <style> carries the phone media queries only; every base style is inline, so clients that strip <style> show the desktop layout
+html-body          # body attributes (bgcolor) are repeated on the outer wrapper table, which Outlook and Gmail keep
+css-max-width      # fluid 600 px container; Outlook desktop gets the fixed-width MSO conditional table instead
+css-opacity        # hidden preheader (opacity: 0, with mso-hide: all for Outlook); a client without it shows the preview line above the header
+css-max-height     # hidden preheader (max-height: 0), same fallback as css-opacity
+css-overflow       # hidden preheader (overflow: hidden), same fallback as css-opacity
+css-text-decoration  # link underline on or off; a client without it keeps its own link style
+css-white-space    # nowrap keeps prices and quantities on one line; without it they may wrap on a narrow screen
+css-word-break     # long words (addresses, form values) break inside the column; without it the client wraps at spaces only
+css-border-radius  # rounded button corners; Outlook desktop shows a square button, which stays clickable

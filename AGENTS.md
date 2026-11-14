@@ -17,9 +17,11 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
 | `make lookup-eval` | precision/recall of the lookup engine on the test package's labelled pairs (needs a fresh `make seed`) |
-| `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here; waits for readiness |
+| `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here — and the Mailpit viewer next to it (UI + API :8125, SMTP :1125, loopback only); waits for both |
+| `make mail-look` / `mail-check` | copy the newest GreenMail messages (`MAIL_LOOK_LIMIT`, 50) into an emptied Mailpit and print its URL; `mail-check` sends one sample of every `django_email` type in every language to its own mailbox and checks only that one (`MAIL_CHECK_SEND=0` = no samples, the newest messages of every mailbox), red when Mailpit's HTML check finds a feature some mail client does not support for a message whose subject matches `MAIL_CHECK_SUBJECT` (regex, default every message), unless `scripts/mail-check-allowlist.txt` names it with a reason |
 | `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
-| `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`) |
+| `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`; `ACCEPT=leads-funnel`, `leads-crm` (phone), `leads-crm-desktop`, `leads-crm-admin`, `ai-studio`) |
+| `scripts/crm-walk-data.sh` | data for a walk through the Leads CRM: fresh seed, one `@crm` run, six tasks for `manager`, send window open all day (`SEED=0` keeps the database); the walk itself is `doc/howto-test-leads-crm.md` |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -70,14 +72,19 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1279 passed / 0 failed / 15 skipped, gate in `enforce` (re-measured 2026-11-11 on the develop clones with pim 3.7.0, one fresh seed) | ~4 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1265 passed / 0 failed / 29 skipped (`@needs-toolbox` skipped; re-measured 2026-11-04 on the develop clones, two fresh seeds) | ~3.5 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1374 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-14 on `develop` with the Leads CRM merged, one fresh seed; a run earlier that day had one failure, SA-6 of `@stock-alerts`, see Gotchas) | ~6.5 min |
+| `make bdd TAGS=@crm` (dev mode, fresh seed, `make mail`) | 72 passed / 0 failed / 1 skipped (`@blocked-by-module`), twice in a row on one database (re-measured 2026-11-14) | ~2 min first, ~1 min after |
+| `make bdd TAGS=@order-mail` (dev mode, fresh seed, `make mail`) | 12 passed, twice in a row on one database (measured 2026-11-12); the first run after a seed waits up to a minute per e-mail while the worker drains the seed's tasks | ~1.5 min first, ~15 s after |
+| `make bdd TAGS=@stock-alerts` (dev mode, fresh seed, `make mail`) | 11 passed, twice in a row on one database (measured 2026-11-12) | ~3 min |
+| `make mail-check` (`make mail`) | 32 HTML messages checked (16 types × 2 languages), 0 outside the allowlist (measured 2026-11-12) | ~5 s |
+| `make bdd` (dev mode, fresh seed, `make mail`, `make dev AI_TOOLBOX_ENABLED=0`) | 1346 passed / 0 failed / 30 skipped (`@needs-toolbox` and one `@blocked-by-module` skipped; `@crm` passes in full; re-measured 2026-11-13 with the leads-crm branches mounted, one fresh seed) | ~6 min |
 | `make bdd TAGS=@access` (dev mode, seed with the access users, after the full run) | 545 passed (`TAGS=@access-security` alone: 507 passed); re-runnable, not one-shot (re-measured 2026-10-10) | ~1 min |
-| `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed | ~10 s |
+| `make bdd TAGS=@funnel` (fresh seed, toolbox up) | 9 passed (re-measured 2026-11-13) | ~10 s |
 | `make bdd TAGS=@toolbox-down` (fresh seed, toolbox up) | 1 passed (outage → failed draft + analysis with alerts, recovery → `review_required` + `intel analysed`; measured 2026-09-15) | ~2 s |
 | `make bdd TAGS=@harness` (`make mail`) | 2 passed | ~1 s |
 | `make e2e` (frontends up) | 12 passed (measured 2026-10-03, access release close) | ~35 s |
-| `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-10-03) | ~45 s |
+| `make e2e E2E_ARGS="e2e/storefront e2e/mail"` (`make pwa PWA_SRC=local PWA_BRANCH=feature/stock-alerts`, `make mail`, fresh seed) | 6 passed; the stock-alert e-mail screenshots in the test package's `test-results/stock-alerts/` (measured 2026-11-12) | ~1.5 min |
+| `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-11-13) | ~45 s |
 | `make e2e E2E_ARGS="e2e/cms/ -k ai_studio"` (`make cms-dev`, `CMS_BASE_URL=http://localhost:8080` to the test-package make, fake toolbox) | 33 passed (measured 2026-10-15, twice) | ~6 min |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
 | `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1265 passed / 0 failed / 29 skipped (measured 2026-11-04 on `release/4.2.0`) | 19 min |
@@ -134,6 +141,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   needs `make pwa` again.
 - First `make e2e` needs `uv run --extra e2e playwright install chromium` in the
   test-package clone (host side).
+- Mailpit is for looking only: the stack sends to GreenMail and BDD reads GreenMail; Mailpit gets copies from
+  `make mail-look` and is emptied by every copy.
 - GreenMail is purged by seed, not by scenarios — a scenario that needs an empty mailbox purges in its own
   `Background` (`Given the sandbox mailbox is empty`); never rely on scenario order.
 - `@toolbox-down` simulates an outage with communicator `test/toolbox-outage/` (`AI_TOOLBOX_TEST_SWITCH` in
@@ -174,7 +183,36 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - The storefront's newsletter key is `AGREEMENTS_API_KEY` (`.env`, default in `docker-compose.yml`): `migrate` imports
   it as an `agreements.subscribe` token and `make pwa` bakes it into the storefront. A changed value needs the service
   recreated (`make dev` or `make up`), `make migrate` and `make pwa`; the old token stays until it is revoked.
+- The storefront's back-in-stock key is `STOCK_ALERTS_API_KEY` (`.env`, default in `docker-compose.yml`): the seed
+  stores it as a `stock_alerts.subscribe` token (access imports only `AGREEMENTS_API_KEY` from settings) and `make pwa`
+  bakes it into the storefront. A changed value needs the service recreated (`make dev`), `make seed`
+  and `make pwa`. The `@stock-alerts` steps and the stock-alert e2e run the restock check in the service container
+  (`make bdd` / `make e2e` pass `SERVICE_CONTAINER`); the alert links point at `STOREFRONT_BASE_URL` (the `PWA_PORT`)
+  and the e-mail pictures at `EMAIL_MEDIA_BASE_URL` (the `SERVICE_PORT`). A storefront branch not on GitHub yet builds
+  from the local clone's commits: `make pwa PWA_SRC=local PWA_BRANCH=<branch>`.
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
+- The CRM has two communicator mailboxes, created by the seed (test package `scripts/seed-crm.py`): `manager`'s
+  (`sales1@greenmail.test`, the channel default, GreenMail login `sandbox`) and `editor`'s (`sales2@greenmail.test`,
+  login `sales2`, a declared GreenMail user). Mail of a company leaves from its owner's mailbox, else the default one.
+  Mailboxes always speak TLS, which GreenMail offers only on SMTPS 3465 with a self-signed certificate: the mailboxes
+  point there and `docker/settings_local.py` sets `GreenMailBackend`, which skips certificate checks for the
+  `greenmail` host only. The channel stays in sandbox mode, so every mail still lands in `sandbox@greenmail.test`.
+- `COMMUNICATOR_UNSUBSCRIBE_BASE_URL` is the service of the stack (`http://localhost:${SERVICE_PORT}`, compose passes
+  it): every outbound mail carries the one-click unsubscribe headers and link. Empty = no link, no headers.
+- Reply classes come through communicator's development endpoint `test/ingest-reply/` (`intent`, `confidence`,
+  `return_date`): the fake toolbox has no reply-class answer and no reply class profile is seeded, so `@crm` passes
+  with `AI_TOOLBOX_ENABLED=0` as well.
+- The seed leaves the follow-up sequence's `autostart` off: switched on for the whole channel it gives every first
+  mail of the older features a follow-up sequence. The `@crm` scenarios switch it on and off themselves.
+- The CMS shows the CRM screens only when munin reports leads and communicator at 0.5.0 or later
+  (`isModuleAtLeast`); munin reads the installed package version (`__version__`), so a mounted clone that is not on
+  `develop` (0.4.x) hides them.
+- The beat runs the back-in-stock check every five minutes (`stock-alerts-check` in `docker/settings_local.py`): when
+  it fires in the middle of SA-6 of `@stock-alerts` (alerts in waves), the third wave goes out early and the
+  scenario fails. Alone the tag passes; in a full `make bdd` run it failed once in two runs on 2026-11-14.
+- Live sending exists only in production (`channel_service.live_allowed`), so the beat never runs communicator's
+  automatic pause here; `@crm` runs the health check once in the service container on the channel set to live in
+  memory.
 - `api/schema/` is public in zeno only through `API_SCHEMA_PUBLIC = True` in `docker/settings_local.py`; the
   service default is staff-only. `DRF_NUM_PROXIES = 0` there (no proxy, `REMOTE_ADDR` only); unset fails `check --deploy` with `volkanos.E001`.
 - A variable for one make run goes on the command line (`make build SERVICE_BRANCH=v4.1.0`): the Makefile includes
@@ -182,7 +220,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - `make schema` refreshes `main/settings_local.py` in the service container when `docker/settings_local.py` changed;
   spectacular warnings are in `build/openapi/*.log`.
 - Ten wrong passwords for one user on `api/token/` block that user from that address for 15 minutes — a probe
-  with a stale password locks `admin` out of the CMS and BDD too.
+  with a stale password locks `admin` out of the CMS and BDD too. A seed keeps the counters (Redis): a BDD run
+  that answers 429 on `api/token/` in every scenario met them — wait, or clear `auth:fail:*` in the service's cache.
 - `make embed` GPU variant needs the GPU visible to Docker via CDI (`/etc/cdi/nvidia.yaml`,
   generated with `nvidia-ctk cdi generate`; regenerate after a driver update). Without the spec `make embed`
   falls back to CPU. First start downloads `EMBED_MODEL` (minutes) into the `hf_cache` volume — `make clean`

@@ -5,6 +5,7 @@ atlas_images
 atlas_results
 lookup
 notifications_default
+todo_default
 siteintel_default
 pim_pull
 pim_push
@@ -23,3 +24,4 @@ supplier_images
 supplier_results
 accounts_pull
 matrix_pull
+stock_alerts

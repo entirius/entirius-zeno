@@ -7,11 +7,13 @@ and refreshed on every dev-mode start. Change .env on the host, not this file.
 """
 
 import re
+import ssl as _ssl
 from pathlib import Path
 
 import dj_database_url
 from celery.schedules import crontab
 from decouple import Csv, config
+from django.core.mail.backends.smtp import EmailBackend as _SmtpBackend
 
 ENVIRONMENT = "development"
 
@@ -121,18 +123,33 @@ EMAIL_SMTP_CONFIGURATION_CHANNELS = {
         "DEFAULT_FROM_EMAIL": config("OUTREACH_SMTP_FROM", default="outreach@greenmail.test"),
     }
 }
+
+
+class GreenMailBackend(_SmtpBackend):
+    """Communicator mailboxes always speak TLS; GreenMail offers it only on SMTPS (greenmail:3465) with a self-signed
+    certificate. Verification is skipped for the `greenmail` host alone."""
+
+    @property
+    def ssl_context(self):
+        if self.host != "greenmail":
+            return super().ssl_context
+        context = _ssl.create_default_context()
+        context.check_hostname, context.verify_mode = False, _ssl.CERT_NONE
+        return context
+
+
+EMAIL_BACKEND = "main.settings_local.GreenMailBackend"
 # A real server shares that entry with EVERY module on the channel (notifications, contact forms, accounts,
 # checkout …) — the communicator's sandbox mode alone would not stop them. So with a real host, every recipient of
 # every mail is rewritten to ZENO_MAIL_REDIRECT_TO at the transport; without it the service refuses to boot.
 if EMAIL_SMTP_CONFIGURATION_CHANNELS["default-europe"]["EMAIL_HOST"] != "greenmail":
     from django.core.exceptions import ImproperlyConfigured
-    from django.core.mail.backends.smtp import EmailBackend as _SmtpBackend
 
     ZENO_MAIL_REDIRECT_TO = config("ZENO_MAIL_REDIRECT_TO", default="")
     if not ZENO_MAIL_REDIRECT_TO:
         raise ImproperlyConfigured("OUTREACH_SMTP_HOST is a real server: set ZENO_MAIL_REDIRECT_TO in .env")
 
-    class RedirectAllBackend(_SmtpBackend):
+    class RedirectAllBackend(GreenMailBackend):
         """Every recipient becomes ZENO_MAIL_REDIRECT_TO; the original ones travel in X-Zeno-Original-To."""
 
         def send_messages(self, email_messages):
@@ -142,8 +159,14 @@ if EMAIL_SMTP_CONFIGURATION_CHANNELS["default-europe"]["EMAIL_HOST"] != "greenma
             return super().send_messages(email_messages)
 
     EMAIL_BACKEND = "main.settings_local.RedirectAllBackend"
-# No COMMUNICATOR_IMAP_* settings: the communicator reads its MailboxConfig row, which the
-# communicator fixture points at greenmail:3143 (sandbox/sandbox, no SSL).
+# No COMMUNICATOR_IMAP_* settings: the communicator reads its Mailbox rows, which the test package's seed points at
+# greenmail:3465 (SMTPS) / 3143 — one per salesperson (`manager`, `editor`), each with its own GreenMail login.
+# The one-click unsubscribe link points at the service of this stack (SERVICE_PORT); empty = no link, no headers.
+COMMUNICATOR_UNSUBSCRIBE_BASE_URL = config("COMMUNICATOR_UNSUBSCRIBE_BASE_URL", default="http://localhost:8100")
+COMMUNICATOR_COMPLAINT_FEEDBACK = True
+COMMUNICATOR_SUPPRESSION_SCOPE = "channel"
+# Address verification (MX lookups) stays off: every BDD address is under `.test`.
+COMMUNICATOR_VERIFY_ENABLED = False
 # Every notifications sink in zeno is a sandbox (GreenMail, blank webhook), so live sends are allowed
 # outside production here only.
 NOTIFICATIONS_ALLOW_LIVE_SENDS = True
@@ -182,6 +205,12 @@ CELERY_BEAT_SCHEDULE = {
     "communicator-schedule-follow-ups": {"task": "django_communicator.schedule_follow_ups", "schedule": 3600},
     # After a toolbox outage: transiently failed drafts / intel analyses retried once the toolbox answers.
     "communicator-retry-drafts": {"task": "django_communicator.retry_failed_drafts", "schedule": 600},
+    # Sequences paused until a return date ("out of office", "not now") resume; addresses are checked again.
+    "communicator-resume-paused": {"task": "django_communicator.resume_paused_sequences", "schedule": 3600},
+    "communicator-reverify-addresses": {
+        "task": "django_communicator.reverify_addresses",
+        "schedule": crontab(hour=2, minute=30),
+    },
     "siteintel-expire-audits": {"task": "django_siteintel.expire_audits", "schedule": crontab(hour=3, minute=0)},
     "siteintel-sweep-stuck": {"task": "django_siteintel.sweep_stuck_audits", "schedule": crontab(minute="*/10")},
     "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
@@ -189,8 +218,13 @@ CELERY_BEAT_SCHEDULE = {
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
+    # Tasks: one bell notification to the owner when a task comes due.
+    "todo-remind-due": {"task": "django_todo.remind_due", "schedule": 900},
     # Work queue: expired leases back to the queue, stalled work escalated, consumers restarted after a crash.
     "enrichment-reap": {"task": "enrichment.reap", "schedule": 60},
+    # Back-in-stock alerts: the restock check and the daily retention (BDD runs the check itself).
+    "stock-alerts-check": {"task": "django_stock_alerts.check", "schedule": 300},
+    "stock-alerts-retention": {"task": "django_stock_alerts.retention", "schedule": crontab(hour=3, minute=30)},
 }
 # An entry stays only when the app of its task is enabled. Most task names are `django_<x>.…`; the enrichment
 # tasks are `enrichment.…`, so the prefixes that differ from their app are mapped explicitly.
@@ -244,6 +278,22 @@ STOREFRONT_BASE_URL = config("STOREFRONT_BASE_URL", default="http://localhost:31
 if _enabled("django_agreements"):
     AGREEMENTS_API_KEY = config("AGREEMENTS_API_KEY", default="zeno-dev-only-newsletter-subscribe-key")
 
+# django_email turns the product pictures of the e-mails into absolute links with this (the service's host port);
+# unset, they go out without a picture.
+EMAIL_MEDIA_BASE_URL = config("EMAIL_MEDIA_BASE_URL", default="http://localhost:8100/")
+
+# Back-in-stock alerts (django_stock_alerts): the e-mail links point at the storefront. The zeno storefront serves the
+# default profile only, whose addresses carry no country segment, so the templates leave {country} out.
+if _enabled("django_stock_alerts"):
+    STOCK_ALERTS_PRODUCT_URL = {"default-europe": f"{STOREFRONT_BASE_URL}/product/{{url_key}}?variant={{sku}}"}
+    STOCK_ALERTS_CANCEL_URL = {"default-europe": f"{STOREFRONT_BASE_URL}/stock-alert/cancel?token={{token}}"}
+    # Two people per available piece and wave: a wave is testable with three requests and one piece.
+    STOCK_ALERTS_WAVE_FACTOR = 2
+    # The key a storefront sends to stock-alerts/v2/<channel>/subscriptions/ (zeno dev-only value; compose passes it to
+    # the service and bakes it into the storefront). The seed stores it as an access token with the publishable scope
+    # stock_alerts.subscribe: access imports only AGREEMENTS_API_KEY from settings.
+    STOCK_ALERTS_API_KEY = config("STOCK_ALERTS_API_KEY", default="zeno-dev-only-stock-alerts-subscribe-key")
+
 # Thumbnails of product and category pictures (pim-thumbs-generate, run by the seed); unset, the seed skips the step and
 # the API's source_set carries only the original file. Square WebP 90% on white, the sizes of entirius-docker's
 # settings_local (the test package README: 5 sizes, 160-1400 px).
@@ -269,7 +319,7 @@ SCHEMA_TAG_GROUPS: dict[str, tuple[str, ...]] = {
     "Checkout": ("checkout", "deliverypoints"),
     "Customers and Consents": ("accounts", "agreements"),
     "Suppliers and Market Data": ("suppliers", "atlas", "pricefighter"),
-    "Leads and Forms": ("leads", "communicator", "siteintel", "contact-forms"),
+    "Leads and Forms": ("leads", "communicator", "todo", "siteintel", "contact-forms"),
     "Platform": ("access", "munin", "regional", "email", "notifications"),
 }
 
