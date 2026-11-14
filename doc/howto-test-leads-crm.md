@@ -95,8 +95,9 @@ administrator sets the process up and watches the sending.
 | `entirius-zeno` | recipe, settings and beat entries for the CRM, the GreenMail SMTPS backend, this guide, `scripts/crm-walk-data.sh` |
 
 Merged with it, from work that waited on local branches: the Mailpit viewer and mail checks, order confirmation
-and cancellation e-mails, back-in-stock alerts (module registration, CMS panel, scenarios). They are not part of
-this round; a problem there is still worth a note.
+and cancellation e-mails (`entirius-django-checkout`, `entirius-django-email`), back-in-stock alerts (the new
+`entirius-django-stock-alerts`, the storefront form, the CMS panel, scenarios). They are not part of this round;
+a problem there is still worth a note.
 
 What a salesperson can do now:
 
@@ -235,6 +236,8 @@ Not findings of this round:
 - CMS visual baselines for the Leads screens are not approved yet; `npm run visual:ux` compares nothing for them.
 - `make bdd`: the scenario SA-6 of `@stock-alerts` can fail when the beat's restock check (every five minutes)
   runs in the middle of it; alone it passes.
+- CI on `develop` of `entirius-service-volkanos` is red at the lint step: the service requires
+  `entirius-django-stock-alerts`, which is not on PyPI yet. Dev mode does not care: it installs the clone.
 
 ## Open questions for the owner
 
