@@ -20,7 +20,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make mail` | GreenMail mail sandbox (SMTP :3125, IMAP :3243, REST :8380) — every mail of the stack lands here — and the Mailpit viewer next to it (UI + API :8125, SMTP :1125, loopback only); waits for both |
 | `make mail-look` / `mail-check` | copy the newest GreenMail messages (`MAIL_LOOK_LIMIT`, 50) into an emptied Mailpit and print its URL; `mail-check` sends one sample of every `django_email` type in every language to its own mailbox and checks only that one (`MAIL_CHECK_SEND=0` = no samples, the newest messages of every mailbox), red when Mailpit's HTML check finds a feature some mail client does not support for a message whose subject matches `MAIL_CHECK_SUBJECT` (regex, default every message), unless `scripts/mail-check-allowlist.txt` names it with a reason |
 | `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
-| `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`) |
+| `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`; `ACCEPT=leads-funnel`, `leads-crm` (phone), `leads-crm-desktop`, `leads-crm-admin`, `ai-studio`) |
+| `scripts/crm-walk-data.sh` | data for a walk through the Leads CRM: fresh seed, one `@crm` run, six tasks for `manager`, send window open all day (`SEED=0` keeps the database); the walk itself is `doc/howto-test-leads-crm.md` |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -71,8 +72,8 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1360 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-13 with the leads-crm branches mounted, after one `@crm` run, one fresh seed; the extra skip is a `@blocked-by-module` funnel scenario) | ~6.5 min |
-| `make bdd TAGS=@crm` (dev mode, fresh seed, `make mail`) | 58 passed / 0 failed / 1 skipped (`@blocked-by-module`), twice in a row on one database (measured 2026-11-13) | ~1.5 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1374 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-14 on `develop` with the Leads CRM merged, one fresh seed; a run earlier that day had one failure, SA-6 of `@stock-alerts`, see Gotchas) | ~6.5 min |
+| `make bdd TAGS=@crm` (dev mode, fresh seed, `make mail`) | 72 passed / 0 failed / 1 skipped (`@blocked-by-module`), twice in a row on one database (re-measured 2026-11-14) | ~2 min first, ~1 min after |
 | `make bdd TAGS=@order-mail` (dev mode, fresh seed, `make mail`) | 12 passed, twice in a row on one database (measured 2026-11-12); the first run after a seed waits up to a minute per e-mail while the worker drains the seed's tasks | ~1.5 min first, ~15 s after |
 | `make bdd TAGS=@stock-alerts` (dev mode, fresh seed, `make mail`) | 11 passed, twice in a row on one database (measured 2026-11-12) | ~3 min |
 | `make mail-check` (`make mail`) | 32 HTML messages checked (16 types × 2 languages), 0 outside the allowlist (measured 2026-11-12) | ~5 s |
@@ -204,8 +205,11 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - The seed leaves the follow-up sequence's `autostart` off: switched on for the whole channel it gives every first
   mail of the older features a follow-up sequence. The `@crm` scenarios switch it on and off themselves.
 - The CMS shows the CRM screens only when munin reports leads and communicator at 0.5.0 or later
-  (`isModuleAtLeast`); munin reads the installed package version, so mounted clones still at 0.4.x hide them until
-  the module releases bump the versions.
+  (`isModuleAtLeast`); munin reads the installed package version (`__version__`), so a mounted clone that is not on
+  `develop` (0.4.x) hides them.
+- The beat runs the back-in-stock check every five minutes (`stock-alerts-check` in `docker/settings_local.py`): when
+  it fires in the middle of SA-6 of `@stock-alerts` (alerts in waves), the third wave goes out early and the
+  scenario fails. Alone the tag passes; in a full `make bdd` run it failed once in two runs on 2026-11-14.
 - Live sending exists only in production (`channel_service.live_allowed`), so the beat never runs communicator's
   automatic pause here; `@crm` runs the health check once in the service container on the channel set to live in
   memory.
@@ -216,7 +220,8 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - `make schema` refreshes `main/settings_local.py` in the service container when `docker/settings_local.py` changed;
   spectacular warnings are in `build/openapi/*.log`.
 - Ten wrong passwords for one user on `api/token/` block that user from that address for 15 minutes — a probe
-  with a stale password locks `admin` out of the CMS and BDD too.
+  with a stale password locks `admin` out of the CMS and BDD too. A seed keeps the counters (Redis): a BDD run
+  that answers 429 on `api/token/` in every scenario met them — wait, or clear `auth:fail:*` in the service's cache.
 - `make embed` GPU variant needs the GPU visible to Docker via CDI (`/etc/cdi/nvidia.yaml`,
   generated with `nvidia-ctk cdi generate`; regenerate after a driver update). Without the spec `make embed`
   falls back to CPU. First start downloads `EMBED_MODEL` (minutes) into the `hf_cache` volume — `make clean`
