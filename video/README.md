@@ -1,7 +1,7 @@
 # Video stack (product films 1, 3 and 5)
 
 An isolated zeno stack, docker project `entirius-zeno-video`, ports +4000, for recording the product films in
-`content-workbench/research/video/third-pass/` (`01-jakosc-danych`, `03-price-fighter`, `05-poprawka-i-wdrozenie`).
+`content-workbench/product-videos/films/` (`01-jakosc-danych`, `03-price-fighter`, `05-poprawka-i-wdrozenie`).
 Not for BDD or e2e: the AI toolbox is the test deployment with real models.
 
 - CMS http://localhost:12180 (admin / admin123, dev only; Polish UI: `localStorage.setItem('cms_lang','PL')`, reload)
