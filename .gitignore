@@ -34,3 +34,6 @@ node_modules/
 
 # Generated OpenAPI specs (make schema)
 build/
+
+# make output saved while setting up a stack (build.log, seed.log, ...)
+/*.log

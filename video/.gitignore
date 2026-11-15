@@ -1,0 +1,3 @@
+# video/state.sh dumps (about 80 MB each, copied between machines, never committed)
+state-*.dump
+state-*-media.tar

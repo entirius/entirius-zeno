@@ -38,16 +38,25 @@ ARG newsletter_key=zeno-dev-only-newsletter-subscribe-key
 # The channel's back-in-stock key: without it a sold-out size offers no "notify me" form (STOCK_ALERTS_API_KEY).
 ARG stock_alerts_key=zeno-dev-only-stock-alerts-subscribe-key
 ENV API_BASE_URL=${api_base_url}
+ARG languages=pl,en
+ARG default_language=pl
+ARG currencies=pln
+ARG default_currency=pln
+ARG menu_url_keys=nastroje,okazje,pory-roku,zestawy,chwile-z-odzysku
 RUN cp -r _CONFIG.example _CONFIG && node -e "\
 const fs = require('fs'); \
 const rw = (f, fn) => { const p = '_CONFIG/' + f; \
   fs.writeFileSync(p, JSON.stringify(fn(JSON.parse(fs.readFileSync(p))), null, 2)); }; \
-rw('app.config.json', c => ({ ...c, API_BASE_URL: '${api_base_url}' })); \
+const list = s => s.split(',').map(x => x.trim()).filter(Boolean); \
+rw('app.config.json', c => ({ ...c, API_BASE_URL: '${api_base_url}', MENU_CINFGURATION: \
+  { ...c.MENU_CINFGURATION, CONFIG_QUERY: { url_key: list('${menu_url_keys}') } } })); \
 rw('channels.config.json', () => ({ '${channel}': \
   { CHANNEL_LABEL: '${channel}', API_CHECKOUT_KEY: '${checkout_key}', \
     API_NEWSLETTER_KEY: '${newsletter_key}', API_STOCK_ALERTS_KEY: '${stock_alerts_key}' } })); \
 rw('countries.config.json', c => ({ default: \
-  { ...c.default, channels: ['${channel}'], default_channel: '${channel}' } })); \
+  { ...c.default, languages: list('${languages}'), default_language: '${default_language}', \
+    currencies: list('${currencies}'), default_currency: '${default_currency}', \
+    channels: ['${channel}'], default_channel: '${channel}' } })); \
 "
 
 RUN corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build
