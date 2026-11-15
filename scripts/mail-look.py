@@ -9,6 +9,8 @@ GreenMail stays the sandbox of the stack and of BDD; Mailpit is emptied and rece
 warning with unsupported clients that is not in mail-check-allowlist.txt. Standard library only (runs on the host).
 """
 
+from __future__ import annotations
+
 import argparse
 import email
 import json
