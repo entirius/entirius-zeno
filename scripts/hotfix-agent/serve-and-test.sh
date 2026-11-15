@@ -15,7 +15,8 @@ serve() { cd "$W" && exec npm run serve -- --port "$PORT"; }
 
 specs=("$@")
 if [[ ${1:-} == --from-outcome ]]; then
-  mapfile -t specs < <(python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1])).get('e2e_specs') or []))" "$2" | sed '/^$/d')
+  specs=()  # a read loop, not mapfile: /bin/bash on macOS is 3.2
+  while IFS= read -r spec; do specs+=("$spec"); done < <(python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1])).get('e2e_specs') or []))" "$2" | sed '/^$/d')
 fi
 (( ${#specs[@]} )) || specs=(tests/e2e/01-smoke.spec.js)
 
