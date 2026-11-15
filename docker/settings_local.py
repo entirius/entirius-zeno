@@ -197,6 +197,13 @@ LEADS_FORM_CONSENT_KEYS = ["marketing_consent"]
 # volume mounted into both (docker-compose.yml and docker-compose.dev.yml).
 LEADS_IMPORT_TMP_DIR = "/tmp/django_leads"
 
+# AI CRM: the chat's model on the fake toolbox (its short commands work without a model too).
+AI_CRM_MODEL = "fake-chat"
+# Prospecting: fixed candidates instead of a toolbox search (the fake toolbox does not know
+# `prospecting.find_people`) and the stub address tester (no SMTP / MX probes from the harness).
+PROSPECTING_SEARCH_PROVIDER = "fixed"
+PROSPECTING_ADDRESS_TESTER = "stub"
+
 # Real cadence for the `beat` container (default file scheduler, no django-celery-beat).
 # BDD drives the same tasks through the modules' test endpoints instead of waiting for beat.
 CELERY_BEAT_SCHEDULE = {
@@ -217,6 +224,10 @@ CELERY_BEAT_SCHEDULE = {
     "leads-retry-analyses": {"task": "django_leads.retry_failed_analyses", "schedule": 600},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
+    # History: entries older than the channel's history_months are deleted.
+    "leads-purge-history": {"task": "django_leads.purge_history", "schedule": crontab(hour=4, minute=30)},
+    # Potential dot: silence and come-back days of every company.
+    "leads-refresh-potential": {"task": "django_leads.refresh_potential", "schedule": crontab(hour=5, minute=30)},
     "notifications-escalate": {"task": "django_notifications.escalate", "schedule": 60},
     # Tasks: one bell notification to the owner when a task comes due.
     "todo-remind-due": {"task": "django_todo.remind_due", "schedule": 900},
@@ -319,7 +330,7 @@ SCHEMA_TAG_GROUPS: dict[str, tuple[str, ...]] = {
     "Checkout": ("checkout", "deliverypoints"),
     "Customers and Consents": ("accounts", "agreements"),
     "Suppliers and Market Data": ("suppliers", "atlas", "pricefighter"),
-    "Leads and Forms": ("leads", "communicator", "todo", "siteintel", "contact-forms"),
+    "Leads and Forms": ("leads", "communicator", "todo", "siteintel", "contact-forms", "ai-crm", "prospecting"),
     "Platform": ("access", "munin", "regional", "email", "notifications"),
 }
 
