@@ -1,6 +1,9 @@
 #!/bin/sh
-# cms_patch.sh — film-2 changes in the running CMS dev server (lost when the cms container is recreated, rerun then).
-# 1. The Price Fighter fix from branch fix/pricefighter-polish (worktree wt/cms-pf-polish, on its way to develop):
+# cms_patch.sh — film 3 (Price Fighter) changes in the running CMS dev server (lost when the cms container is recreated,
+# rerun then).
+# CMS_FIX_SRC: checkout of GitHub entirius/entirius-pwa-cms at develop 45397ce2 or later; default ../wt/cms-pf-polish
+# next to this clone (worktree of fix/pricefighter-polish on the recording PC). video/README.md, point 6.
+# 1. The Price Fighter fix from branch fix/pricefighter-polish (merged into develop in 45397ce2):
 #    Gap Table "Produkt" column, reason / strategy / mode in words, history date "Zastosowano", two-decimal preview.
 #    The PriceFighter views are identical in v3.7.0 and develop, so they are copied as they are; the locales differ,
 #    so only the fix's pricefighter keys are added.
@@ -9,6 +12,8 @@ set -eu
 C=entirius-zeno-video-cms-1
 APP=/entirius/pwa/entirius-pwa-cms
 SRC=${CMS_FIX_SRC:-$(cd "$(dirname "$0")/../.." && pwd)/wt/cms-pf-polish}
+[ -d "$SRC/src/views/PriceFighter" ] || {
+  echo "no entirius-pwa-cms checkout at $SRC: set CMS_FIX_SRC (develop 45397ce2 or later, video/README.md)" >&2; exit 1; }
 for f in GapTable.vue Strategies.vue DecisionHistory.vue constants.js \
          components/GapRowDetail.vue components/ApplyPreviewModal.vue components/MarketCell.vue; do
   docker cp "$SRC/src/views/PriceFighter/$f" "$C:$APP/src/views/PriceFighter/$f"

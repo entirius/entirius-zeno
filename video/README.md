@@ -27,7 +27,8 @@ git clone -b feature/sloik-chwil https://github.com/entirius/entirius-test-packa
 
 ## 2. `.env`
 
-`cp .env.example .env`, then change these (everything else as in the example):
+Done by the human, not by the Claude session that prepares the environment: its start prompt forbids reading or writing
+`.env` and keys. `cp .env.example .env`, then change these (everything else as in the example):
 
 ```
 COMPOSE_PROJECT_NAME=entirius-zeno-video     # the video/*.sh scripts expect this name
@@ -97,7 +98,10 @@ Lost when the containers are recreated (`make up` after a build, `make cms`); re
 - `video/svc_patch.sh`: pricemanager in the baked v4.3.0 image, bundle-component price rows no longer reach the
   product page (film 3: the hero sits in a bundle). Same fix as entirius-django-pricemanager 763e203 on develop.
 - `video/cms_patch.sh`: Price Fighter Gap Table "Produkt" column, reasons and modes in words, history date
-  "Zastosowano", two-decimal preview, no raw `sloik-pl` under the market. Copies the views from a CMS checkout:
-  `CMS_FIX_SRC=<entirius-pwa-cms at develop, 45397ce2 or later>` (default `../wt/cms-pf-polish`).
+  "Zastosowano", two-decimal preview, no raw `sloik-pl` under the market (film 3). Copies the views from a checkout of
+  the CMS repo, GitHub `entirius/entirius-pwa-cms`: branch `develop` at 45397ce2 or later (the merge of
+  `fix/pricefighter-polish`, which is not on the remote). Set `CMS_FIX_SRC=<that checkout>`; the default
+  `../wt/cms-pf-polish` (next to this clone) is a personal worktree of `fix/pricefighter-polish` on the recording PC:
+  `git clone -b develop https://github.com/entirius/entirius-pwa-cms.git <dir>` and `CMS_FIX_SRC=<dir> video/cms_patch.sh`.
 
 Both become unnecessary once the stack runs a service and CMS release that contains these commits.
