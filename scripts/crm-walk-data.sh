@@ -38,7 +38,10 @@ C2=$(company_id "Example Shop 2"); C3=$(company_id "Example Shop 3"); C4=$(compa
 DEAL=$(curl -s -H "$AUTH" "$API/api/leads/v2/admin/$CHANNEL/deals/?kind=open" | jq -c '.results[0] // {}')
 DEAL_ID=$(echo "$DEAL" | jq -r '.id // empty'); DEAL_TITLE=$(echo "$DEAL" | jq -r '.subject_label // .title // empty')
 
-TODAY=$(date +%F); TZ_OFFSET=$(date +%:z)
+# Dates through python3: GNU `date -d` / `%:z` do not exist in the BSD date of macOS.
+day() { python3 -c 'import datetime, sys; print(datetime.date.today() + datetime.timedelta(days=int(sys.argv[1])))' "$1"; }
+TODAY=$(day 0)
+TZ_OFFSET=$(python3 -c 'import datetime; z = datetime.datetime.now().astimezone().strftime("%z"); print(z[:3] + ":" + z[3:])')
 task() { # title kind due subject_ref subject_label note
   curl -s -o /dev/null -w "%{http_code} " -H "$AUTH" -H 'content-type: application/json' \
     -d "$(jq -n --arg t "$1" --arg k "$2" --arg d "$3" --arg s "$4" --arg l "$5" --arg n "$6" \
@@ -46,11 +49,11 @@ task() { # title kind due subject_ref subject_label note
     "$API/api/todo/v2/admin/$CHANNEL/tasks/"
 }
 echo "== tasks for manager"
-task "Call back about the offer" phone "$(date -d '2 days ago' +%F)T10:00:00$TZ_OFFSET" "leads.Company:$C4" "Example Shop 4" "Asked for a call after the trade fair."
-task "Send the price list" mail "$(date -d yesterday +%F)T15:00:00$TZ_OFFSET" "leads.Company:$C3" "Example Shop 3" ""
+task "Call back about the offer" phone "$(day -2)T10:00:00$TZ_OFFSET" "leads.Company:$C4" "Example Shop 4" "Asked for a call after the trade fair."
+task "Send the price list" mail "$(day -1)T15:00:00$TZ_OFFSET" "leads.Company:$C3" "Example Shop 3" ""
 task "Check the shop's new catalogue" todo "${TODAY}T09:00:00$TZ_OFFSET" "leads.Company:$C2" "Example Shop 2" ""
 task "Confirm the meeting time" phone "${TODAY}T23:30:00$TZ_OFFSET" "leads.Company:$C4" "Example Shop 4" ""
-task "Demo meeting" meeting "$(date -d '+3 days' +%F)T10:00:00$TZ_OFFSET" "leads.Company:$C2" "Example Shop 2" ""
+task "Demo meeting" meeting "$(day 3)T10:00:00$TZ_OFFSET" "leads.Company:$C2" "Example Shop 2" ""
 [ -n "$DEAL_ID" ] && task "Send the contract draft" mail "${TODAY}T23:45:00$TZ_OFFSET" "leads.Deal:$DEAL_ID" "$DEAL_TITLE" ""
 echo
 
