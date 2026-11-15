@@ -115,12 +115,15 @@ dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 
 # After a Docker restart `make dev` alone leaves the CMS dev server and the mail sandbox down. The storefront is
 # started from its existing container (no rebuild); the toolbox runs outside zeno, so it is only checked.
-resume:  ## Back to the state after `make setup DEV=1` after a Docker restart: dev, mail, cms-dev, storefront, toolbox check
+resume:  ## Back to the state after `make setup DEV=1` after a Docker restart: dev, mail, cms-dev, storefront, embed if it existed, toolbox check
 	@$(MAKE) --no-print-directory dev
 	@$(MAKE) --no-print-directory mail
 	@$(MAKE) --no-print-directory cms-dev
-	@$(COMPOSE_DEV) $(PROFILES) --profile pwa start pwa >/dev/null 2>&1 && echo "storefront started" || \
-		echo "storefront: no container (make pwa builds it; a recipe without django_matrix has none)"
+	@if [ -z "$$($(COMPOSE_DEV) $(PROFILES) --profile pwa ps -aq pwa)" ]; then \
+		echo "storefront: no container (make pwa builds it; a recipe without django_matrix has none)"; \
+	elif $(COMPOSE_DEV) $(PROFILES) --profile pwa start pwa >/dev/null; then echo "storefront started"; \
+	else echo "storefront: failed to start (docker compose logs pwa)"; fi
+	@if [ -n "$$($(EMBED_COMPOSE) $(PROFILES) --profile embed ps -aq embed)" ]; then $(MAKE) --no-print-directory embed; fi
 	@$(MAKE) --no-print-directory toolbox-check || { \
 		echo "toolbox not answering: start it in its own repo (runserver 0.0.0.0:8300, the fake models),"; \
 		echo "then 'make toolbox-check' — or set AI_TOOLBOX_ENABLED=0 in .env and run 'make dev'"; }

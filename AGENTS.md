@@ -13,7 +13,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make clone-repos` | https clones of all entirius repos into `repos/` groups, modules at uv.lock versions (`gh` lists the org) |
 | `make build` / `up` / `down` | build image (`BUILD_ARGS="--no-cache --pull"` = cold build; also on `pwa` / `cms`), start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
-| `make resume` | after a Docker restart, back to the state of `make setup DEV=1`: `dev`, `mail`, `cms-dev`, storefront from its container, toolbox checked only (says how to start it), `health`; the data stays |
+| `make resume` | after a Docker restart, back to the state of `make setup DEV=1`: `dev`, `mail`, `cms-dev`, storefront from its container ("no container" and "failed to start" are told apart), `embed` when its container exists, toolbox checked only (says how to start it), `health`; the data stays |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
@@ -191,6 +191,9 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   (`make bdd` / `make e2e` pass `SERVICE_CONTAINER`); the alert links point at `STOREFRONT_BASE_URL` (the `PWA_PORT`)
   and the e-mail pictures at `EMAIL_MEDIA_BASE_URL` (the `SERVICE_PORT`). A storefront branch not on GitHub yet builds
   from the local clone's commits: `make pwa PWA_SRC=local PWA_BRANCH=<branch>`.
+- Prospecting runs on the `fixed` provider with `PROSPECTING_DAILY_BUDGET = 100_000` in `docker/settings_local.py`: the
+  default 100 calls a day is spent in a few BDD runs (every search takes three) and the searches then fail with
+  "daily budget used up".
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
 - The CRM has two communicator mailboxes, created by the seed (test package `scripts/seed-crm.py`): `manager`'s
   (`sales1@greenmail.test`, the channel default, GreenMail login `sandbox`) and `editor`'s (`sales2@greenmail.test`,

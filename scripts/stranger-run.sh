@@ -35,9 +35,10 @@ cd "$ROOT"
 STACK=${ZENO_STACK:-s2}
 OFFSET=${ZENO_PORT_OFFSET:-1000}
 PROJECT=entirius-zeno-$STACK
-WORK=$(realpath -m "${STRANGER_DIR:-.runner/stranger}")
+abspath() { python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$1"; }  # no GNU realpath -m on macOS
+WORK=$(abspath "${STRANGER_DIR:-.runner/stranger}")
 BRANCH=${STRANGER_BRANCH:-$(git branch --show-current)}
-OUT=$(realpath -m "${OUT:-todo/docs-launch/memo/stranger-run.json}")
+OUT=$(abspath "${OUT:-todo/docs-launch/memo/stranger-run.json}")
 KEEP=${KEEP:-0}
 BUILD_ARGS=${BUILD_ARGS---no-cache --pull}
 RECIPE=${RECIPE:-}
@@ -367,7 +368,7 @@ phase_two() { # phase 1 exit code → service_only.{status,reason}; uv comes fro
 
 host_facts() {
   fact host.os "$(sed -n 's/^PRETTY_NAME="\(.*\)"$/\1/p' /etc/os-release 2>/dev/null) ($(uname -sr))"
-  fact_json host.cpus "$(nproc)"
+  fact_json host.cpus "$(getconf _NPROCESSORS_ONLN)"
   fact_json host.mem_gb "$(awk '/MemTotal/ {printf "%d", $2 / 1048576 + 0.5}' /proc/meminfo)"
   fact host.docker "$(docker version --format '{{.Server.Version}}')"
   fact host.compose "$(docker compose version --short)"

@@ -176,7 +176,9 @@ def switch_to_develop():
         if git(repo, "rev-parse", "--verify", "--quiet", "origin/develop").returncode:
             print(f"  skip (no develop): {name}")
             continue
-        git(repo, "switch", "--quiet", "develop")
+        if git(repo, "switch", "--quiet", "develop").returncode:
+            print(f"  skip (switch to develop failed): {name}")
+            continue
         pulled = git(repo, "merge", "--ff-only", "--quiet", "origin/develop").returncode == 0
         print(f"  develop{'' if pulled else ' (local commits, not fast-forwarded)'}: {name}")
 

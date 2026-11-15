@@ -203,6 +203,7 @@ AI_CRM_MODEL = "fake-chat"
 # `prospecting.find_people`) and the stub address tester (no SMTP / MX probes from the harness).
 PROSPECTING_SEARCH_PROVIDER = "fixed"
 PROSPECTING_ADDRESS_TESTER = "stub"
+PROSPECTING_DAILY_BUDGET = 100_000  # the fixed provider costs nothing; BDD runs many searches a day (default 100 calls)
 
 # Real cadence for the `beat` container (default file scheduler, no django-celery-beat).
 # BDD drives the same tasks through the modules' test endpoints instead of waiting for beat.
