@@ -63,6 +63,11 @@ works; "Rewrite" on a draft and drafts written by a rule are refused with a sent
 toolbox up (`make toolbox-check` green) they answer with placeholder text. Never point the stack at a real model
 for this.
 
+Back to work after a Docker (or computer) restart: `make resume`. It runs `make dev`, `make mail` and
+`make cms-dev`, starts the storefront from its container, checks the toolbox and ends with `make health`; the data
+stays as it was. The toolbox runs outside zeno: when `make resume` says it is not answering, start it in its own
+repository (`runserver 0.0.0.0:8300`) and run `make toolbox-check` again.
+
 A clean start at any time: `scripts/crm-walk-data.sh` again. Tasks and the send window only, on the data that is
 there: `SEED=0 scripts/crm-walk-data.sh`.
 
