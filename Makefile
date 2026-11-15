@@ -1,4 +1,4 @@
-.PHONY: hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail mail-look mail-check toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe pr-inventory
+.PHONY: resume hotfix-agent hotfix-once hotfix-status hotfix-stop cms-dev-s2 setup mail mail-look mail-check toolbox-check e2e-funnel e2e-accept lookup-eval runner-init runner-once runner-loop runner-status runner-stop runner-test runner-dry help init clone clone-repos clone-tests clone-docs refresh-repos build up up-infra dev link embed module-test down logs status shell health urls migrate test smoke seed bdd e2e pwa cms cms-dev frontends docs docs-alt docs-screens www check clean stranger-run schema schema-settings schema-admin schema-storefront schema-check recipe-check recipe-probe pr-inventory
 .DEFAULT_GOAL := help
 
 -include .env
@@ -112,6 +112,19 @@ dev:  ## Start with repos/ mounted for hot reload (run `make clone` first)
 # report stale provenance — rerun `make dashboard` once the stack settles.
 	@python3 scripts/dashboard.py 2>/dev/null || true
 	@$(MAKE) --no-print-directory urls
+
+# After a Docker restart `make dev` alone leaves the CMS dev server and the mail sandbox down. The storefront is
+# started from its existing container (no rebuild); the toolbox runs outside zeno, so it is only checked.
+resume:  ## Back to the state after `make setup DEV=1` after a Docker restart: dev, mail, cms-dev, storefront, toolbox check
+	@$(MAKE) --no-print-directory dev
+	@$(MAKE) --no-print-directory mail
+	@$(MAKE) --no-print-directory cms-dev
+	@$(COMPOSE_DEV) $(PROFILES) --profile pwa start pwa >/dev/null 2>&1 && echo "storefront started" || \
+		echo "storefront: no container (make pwa builds it; a recipe without django_matrix has none)"
+	@$(MAKE) --no-print-directory toolbox-check || { \
+		echo "toolbox not answering: start it in its own repo (runserver 0.0.0.0:8300, the fake models),"; \
+		echo "then 'make toolbox-check' — or set AI_TOOLBOX_ENABLED=0 in .env and run 'make dev'"; }
+	@$(MAKE) --no-print-directory health
 
 link:  ## Re-link mounted module repos in service AND workers without restarting (dev mode)
 	@for svc in service worker worker-bulk; do \
