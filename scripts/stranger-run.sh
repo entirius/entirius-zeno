@@ -82,7 +82,7 @@ stranger_env() { # PATH → a newcomer's shell: nothing of the operator's enviro
     GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false)
   # HOME stays: the Docker CLI needs ~/.docker (contexts, credential store).
   for name in HOME USER LOGNAME LANG TERM XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG; do
-    if [[ -v $name ]]; then STRANGER_ENV+=("$name=${!name}"); fi
+    if [ -n "${!name+x}" ]; then STRANGER_ENV+=("$name=${!name}"); fi
   done
 }
 
