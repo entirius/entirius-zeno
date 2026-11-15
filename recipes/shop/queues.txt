@@ -14,6 +14,7 @@ communicator_default
 communicator_send
 communicator_inbound
 leads_default
+prospecting_default
 contact_forms
 contact_forms_conversions
 enrichment
