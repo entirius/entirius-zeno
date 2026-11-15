@@ -11,6 +11,20 @@ PORT=$(grep -E "^SERVICE_PORT=" .env 2>/dev/null | tail -1 | cut -d= -f2)
 API=http://localhost:${PORT:-8100}
 CHANNEL=default-europe
 
+# The drafts of part A are written by the toolbox: an enabled toolbox that does not answer leaves every draft
+# failed while the rest goes green, so stop here; a disabled one leaves the review queue empty, so say so.
+echo "== toolbox"
+if ! TOOLBOX=$(make -s --no-print-directory toolbox-check 2>&1); then
+  echo "$TOOLBOX"
+  echo "the toolbox is enabled but not answering: start the fake toolbox (make toolbox-check green) or set"
+  echo "AI_TOOLBOX_ENABLED=0 in .env and run make dev (then part A has no drafts to review)"
+  exit 1
+fi
+echo "$TOOLBOX" | tail -1
+case $TOOLBOX in
+  "toolbox-check: disabled"*) echo "warning: no drafts without the toolbox — part A2 of the walk needs the fake toolbox" ;;
+esac
+
 if [ "${SEED:-1}" = 1 ]; then
   echo "== seed $(date +%T)"
   mkdir -p build
