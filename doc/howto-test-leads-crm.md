@@ -58,10 +58,14 @@ Checks, all must hold before the walk:
 If the Leads menu shows only the old screens, the module versions are below 0.5.0: a clone is not on `develop`
 (`git -C repos/django/entirius-django-leads status`).
 
-The AI toolbox is optional for this round. With `AI_TOOLBOX_ENABLED=0` (the default) every step of the scenario
-works; "Rewrite" on a draft and drafts written by a rule are refused with a sentence that says so. With the fake
-toolbox up (`make toolbox-check` green) they answer with placeholder text. Never point the stack at a real model
-for this.
+Part A needs the fake AI toolbox: it writes the drafts that A1.3 ("Waiting") and A2 review. Set
+`AI_TOOLBOX_ENABLED=1` in `.env`, start the toolbox with its fake models and check `make toolbox-check` is green
+before `scripts/crm-walk-data.sh`. With `AI_TOOLBOX_ENABLED=0` (the `.env.example` default) the seed and `@crm`
+still pass, but the review queue stays empty, so A1.3 shows 0 and A2 cannot be walked; parts B–D and the rest of
+A work, and "Rewrite" on a draft is refused with a sentence that says so. `scripts/crm-walk-data.sh` checks the
+toolbox first: enabled but not answering, it stops before the seed (otherwise every draft would fail with
+`ToolboxConnectionError` while the run goes green); disabled, it warns that there will be no drafts. Never point
+the stack at a real model for this.
 
 A clean start at any time: `scripts/crm-walk-data.sh` again. Tasks and the send window only, on the data that is
 there: `SEED=0 scripts/crm-walk-data.sh`.
