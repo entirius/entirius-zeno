@@ -167,7 +167,7 @@ def clean_clones(groups):
 
 
 def switch_to_develop():
-    for repo, skip in clean_clones(CLONE_GROUPS):
+    for repo, skip in clean_clones(WORLD_GROUPS):  # the service and docs clones too: dev mode mounts them
         name = repo.relative_to(ROOT)
         if skip:
             print(f"  skip ({skip}): {name}")
