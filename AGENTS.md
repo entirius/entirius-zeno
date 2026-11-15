@@ -13,6 +13,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make clone-repos` | https clones of all entirius repos into `repos/` groups, modules at uv.lock versions (`gh` lists the org) |
 | `make build` / `up` / `down` | build image (`BUILD_ARGS="--no-cache --pull"` = cold build; also on `pwa` / `cms`), start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
+| `make resume` | after a Docker restart, back to the state of `make setup DEV=1`: `dev`, `mail`, `cms-dev`, storefront from its container, toolbox checked only (says how to start it), `health`; the data stays |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
