@@ -1,6 +1,6 @@
-# How to test the Leads CRM from `develop`
+# How to test the CRM from `develop`
 
-The Leads CRM landed on `develop` on 2026-11-14 in eight repositories. It is not released: no module version on
+The CRM landed on `develop` on 2026-11-14 in eight repositories. It is not released: no module version on
 PyPI, no CMS release, no page on docs.entirius.com. This guide is the hand-over for the test round that comes
 before all of that: how to stand the stack up from the `develop` branches, what changed, what to walk through and
 in which order, and what happens with the findings. The product documentation is written after this round is
@@ -52,10 +52,10 @@ Checks, all must hold before the walk:
 |---|---|
 | `make health` | `All services OK` |
 | `scripts/crm-walk-data.sh` | `SEED OK`, `72 scenarios passed, 0 failed, 1 skipped`, six `201`, `All services OK` |
-| CMS at http://localhost:8180/leads as `manager` / `manager123` | Today with five tasks under "Due now" |
+| CMS at http://localhost:8180/crm as `manager` / `manager123` | Today with five tasks under "Due now" |
 | `grep -H __version__ repos/django/entirius-django-{leads,communicator,todo,notifications}/src/*/__init__.py` | leads 0.5.0, communicator 0.5.0, todo 0.1.0, notifications 0.3.0 |
 
-If the Leads menu shows only the old screens, the module versions are below 0.5.0: a clone is not on `develop`
+If the CRM menu shows only the old screens, the module versions are below 0.5.0: a clone is not on `develop`
 (`git -C repos/django/entirius-django-leads status`).
 
 Part A needs the fake AI toolbox: it writes the drafts that A1.3 ("Waiting") and A2 review. Set
@@ -77,7 +77,7 @@ there: `SEED=0 scripts/crm-walk-data.sh`.
 
 | What | Where |
 |---|---|
-| Panel | http://localhost:8180/leads |
+| Panel | http://localhost:8180/crm |
 | Salesperson | `manager` / `manager123` (Anna Kowalska, mailbox `sales1@greenmail.test`) |
 | Second salesperson | `editor` / `editor123` (Piotr Lis, mailbox `sales2@greenmail.test`) |
 | Administrator | `admin` / `admin123` |
@@ -98,7 +98,7 @@ administrator sets the process up and watches the sending.
 | `entirius-django-communicator` 0.5.0 | a mailbox per salesperson with warm-up, caps and an automatic pause, send windows, follow-up sequences, reply types with a plan each, approvals, the conversation timeline, the recipient check before every approval and delivery |
 | `entirius-django-todo` 0.1.0 (new) | tasks about any object, with a due date, a today list and reminders |
 | `entirius-django-notifications` 0.3.0 | the notification kinds and titles of the CRM alerts |
-| `entirius-pwa-cms` | the Leads panel: Today, Inbox and Review, Companies, the company card, Deals with the board, Approvals, Reports, Settings |
+| `entirius-pwa-cms` | the CRM panel: Today, Inbox and Review, Companies, the company card, Deals with the board, Approvals, Reports, Settings |
 | `entirius-service-volkanos` | the tasks module and the CRM settings in the registry |
 | `entirius-test-package-emporium` | the CRM seed (two mailboxes, owners, stages), the `@crm` features, the e2e helpers |
 | `entirius-zeno` | recipe, settings and beat entries for the CRM, the GreenMail SMTPS backend, this guide, `scripts/crm-walk-data.sh` |
@@ -139,7 +139,7 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
 ### A. A salesperson's day — desktop, `manager`, about 25 minutes
 
 **A1. Morning**
-1. Open `/leads` → **Today**. The side menu has seven entries: Today, Inbox, Companies, Deals, Approvals,
+1. Open `/crm` → **Today**. The side menu has seven entries: Today, Inbox, Companies, Deals, Approvals,
    Reports, Settings.
 2. "Due now" holds five tasks, overdue before today's ("Overdue 2 days", "Today 23:30").
 3. "Waiting" shows the number of drafts to approve and of replies that need review.
@@ -195,12 +195,12 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
 
 ### B. Phone — 390 × 844, `manager`, about 10 minutes
 
-1. `/leads` → Today; the bottom bar: Today · Inbox · Companies · Deals. Nothing scrolls sideways.
+1. `/crm` → Today; the bottom bar: Today · Inbox · Companies · Deals. Nothing scrolls sideways.
 2. A whole task row opens its company; "Mark done" is in reach.
 3. Inbox → Drafts → Review: "Swipe right to send, left to skip". After **Skip** the next draft's **Send** works
    at once.
 4. Company card → Tasks → Log call: one field.
-5. Deals: a list grouped by stage with the value; `/leads/deals/board` shows the list and a sentence that the
+5. Deals: a list grouped by stage with the value; `/crm/deals/board` shows the list and a sentence that the
    board is for a larger screen.
 
 ### C. Administrator — desktop, `admin`, about 15 minutes
@@ -221,7 +221,7 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
 9. **Companies → Import**: a small CSV (`name,domain,email` and two companies) → the result in sentences, ignored
    columns named.
 10. **Reports**: the period calendar opens; the funnel has "% of the first stage" in every row.
-11. An address like `/leads/anything` → "Page not found" with a link to Today.
+11. An address like `/crm/anything` → "Page not found" with a link to Today.
 
 ### D. Read-only — `viewer`, about 5 minutes
 
@@ -242,7 +242,7 @@ Not findings of this round:
 - On the phone the grey "Actions" caption above the buttons and the place of toasts outside Review belong to the
   shell of every CMS panel.
 - The deals board and Approvals are desktop screens.
-- CMS visual baselines for the Leads screens are not approved yet; `npm run visual:ux` compares nothing for them.
+- CMS visual baselines for the CRM screens are not approved yet; `npm run visual:ux` compares nothing for them.
 - `make bdd`: the scenario SA-6 of `@stock-alerts` can fail when the beat's restock check (every five minutes)
   runs in the middle of it; alone it passes.
 - Until the module releases, only the developer stack works on `develop`: `make setup` without `DEV=1` builds the

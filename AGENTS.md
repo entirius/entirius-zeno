@@ -22,7 +22,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make mail-look` / `mail-check` | copy the newest GreenMail messages (`MAIL_LOOK_LIMIT`, 50) into an emptied Mailpit and print its URL; `mail-check` sends one sample of every `django_email` type in every language to its own mailbox and checks only that one (`MAIL_CHECK_SEND=0` = no samples, the newest messages of every mailbox), red when Mailpit's HTML check finds a feature some mail client does not support for a message whose subject matches `MAIL_CHECK_SUBJECT` (regex, default every message), unless `scripts/mail-check-allowlist.txt` names it with a reason |
 | `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
 | `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`; `ACCEPT=leads-funnel`, `leads-crm` (phone), `leads-crm-desktop`, `leads-crm-admin`, `ai-studio`) |
-| `scripts/crm-walk-data.sh` | data for a walk through the Leads CRM: fresh seed, one `@crm` run, six tasks for `manager`, send window open all day (`SEED=0` keeps the database); stops first when the toolbox is enabled but not answering, warns when it is disabled (no drafts for part A); the walk itself is `doc/howto-test-leads-crm.md` |
+| `scripts/crm-walk-data.sh` | data for a walk through the CRM: fresh seed, one `@crm` run, six tasks for `manager`, send window open all day (`SEED=0` keeps the database); stops first when the toolbox is enabled but not answering, warns when it is disabled (no drafts for part A); the walk itself is `doc/howto-test-leads-crm.md` |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -191,9 +191,6 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
   (`make bdd` / `make e2e` pass `SERVICE_CONTAINER`); the alert links point at `STOREFRONT_BASE_URL` (the `PWA_PORT`)
   and the e-mail pictures at `EMAIL_MEDIA_BASE_URL` (the `SERVICE_PORT`). A storefront branch not on GitHub yet builds
   from the local clone's commits: `make pwa PWA_SRC=local PWA_BRANCH=<branch>`.
-- Prospecting runs on the `fixed` provider with `PROSPECTING_DAILY_BUDGET = 100_000` in `docker/settings_local.py`: the
-  default 100 calls a day is spent in a few BDD runs (every search takes three) and the searches then fail with
-  "daily budget used up".
 - `@access` and `@access-security` are re-runnable, not one-shot, but need a seed with those users.
 - The CRM has two communicator mailboxes, created by the seed (test package `scripts/seed-crm.py`): `manager`'s
   (`sales1@greenmail.test`, the channel default, GreenMail login `sandbox`) and `editor`'s (`sales2@greenmail.test`,

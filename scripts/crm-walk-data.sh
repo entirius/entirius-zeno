@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Data for a walk through the Leads CRM on the dev stack: a fresh seed, one run of the @crm features (replies of
+# Data for a walk through the CRM on the dev stack: a fresh seed, one run of the @crm features (replies of
 # every type, drafts to approve, deals, two mailboxes), six tasks for the salesperson `manager` and a send window
 # that is open all day. Dev credentials only. Takes about 15 minutes; run it again for a clean start.
 #
@@ -77,4 +77,4 @@ curl -s -X PUT -H "Authorization: Bearer $ADMIN" -H 'content-type: application/j
   "$API/api/communicator/v2/admin/$CHANNEL/policy/" | jq -c '{business_days_only, daily_cap, windows}'
 
 make -s health | tail -1
-echo "== done $(date +%T): log in to the CMS as manager / manager123 and open /leads"
+echo "== done $(date +%T): log in to the CMS as manager / manager123 and open /crm"

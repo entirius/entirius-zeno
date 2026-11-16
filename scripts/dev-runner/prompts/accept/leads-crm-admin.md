@@ -1,11 +1,11 @@
-## Scenario — CRM: desk work and administration (Leads panel, flows 9–11, settings, read-only)
+## Scenario — CRM: desk work and administration (CRM panel, flows 9–11, settings, read-only)
 
 Channel `default-europe` is in sandbox mode and every mail lands in the local mail sandbox (GreenMail, URL in the
 run context); nothing leaves the machine. The AI toolbox serves only `fake` models. Data comes from a fresh seed
 plus one run of the CRM test suite: names may look artificial; that is not a finding.
 
 **Logins.** Administrator from the run context for flows 9–11 and the settings. Read-only pass: `viewer` /
-`viewer123`. The panel is Leads: `/leads` on the CMS URL of the run context.
+`viewer123`. The panel is CRM: `/crm` on the CMS URL of the run context.
 
 **Budget of the session.** About 55 minutes. Create `report.md` with the three headings before the first flow and
 rewrite it after every flow, so an interrupted session still leaves a report. This scenario is desk work: the
@@ -18,7 +18,7 @@ it first, it is short. When time runs short, list what was not walked under Ques
 
 | Phone | Desktop |
 |---|---|
-| `/leads/import` shows a "desktop only" wall; Companies has no Import action | Companies → Import; the column list names the custom-field columns of the channel (`attr.<key>`) |
+| `/crm/import` shows a "desktop only" wall; Companies has no Import action | Companies → Import; the column list names the custom-field columns of the channel (`attr.<key>`) |
 | — | Owner is pre-set to me; the note about running the rules is visible without hovering |
 | — | Upload a small CSV you write in the run directory (3 companies: name, domain, one contact e-mail at `example.test`) with "run rules" on → the report counts created rows and ignored columns and says for how many the automation started; drafts appear in Approvals |
 
@@ -28,7 +28,7 @@ Blocker: rules run with the box off (or not with it on); companies imported with
 
 | Phone | Desktop |
 |---|---|
-| A direct link to `/leads/settings/mailboxes` opens the list, usable at 390 px (the entry is not in the bottom bar) | Settings → Mailboxes → Add mailbox → fill the form (any address at `greenmail.test`, host `greenmail`) → Save → Test login → SMTP / IMAP results shown in plain words |
+| A direct link to `/crm/settings/mailboxes` opens the list, usable at 390 px (the entry is not in the bottom bar) | Settings → Mailboxes → Add mailbox → fill the form (any address at `greenmail.test`, host `greenmail`) → Save → Test login → SMTP / IMAP results shown in plain words |
 | — | the password field never shows the password after save (it says it is saved); Delete asks to confirm |
 | — | the list shows a state badge and "sent / cap today" per mailbox |
 
@@ -84,8 +84,8 @@ into the report at its old severity with the words "still there". Then judge eve
   the header; Sending health fits 1280 px with a paused mailbox; the word is Company type · Typ firmy, never
   "Lead type".
 - Third walk: a bulk Approve says how many drafts it approved and how many not, each refused row shows its reason;
-  Test login of a mailbox that sends reads "Login works" for SMTP and IMAP; an unknown Leads address shows a
-  not-found page with a way back and Company types lives at /leads/settings/company-types; Reports → Funnel
+  Test login of a mailbox that sends reads "Login works" for SMTP and IMAP; an unknown CRM address shows a
+  not-found page with a way back and Company types lives at /crm/settings/company-types; Reports → Funnel
   counts created companies as entered and shows "% of the first stage"; Sending health's "Sent" and "Sent
   today" agree; the word beside a toggle follows it (Active / Off); a company without a type reads "Unknown" in
   the Company type column, not clipped; the approval log has no "0 drafts" entry.
