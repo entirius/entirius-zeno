@@ -73,7 +73,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1374 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-14 on `develop` with the Leads CRM merged, one fresh seed; a run earlier that day had one failure, SA-6 of `@stock-alerts`, see Gotchas) | ~6.5 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1390 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-16 with the CRM round of 2026-11-16 mounted: history, import column mapping, no AI CRM / prospecting; one fresh seed; SA-6 of `@stock-alerts` can fail when the beat fires mid-scenario, see Gotchas) | ~7 min |
 | `make bdd TAGS=@crm` (dev mode, fresh seed, `make mail`) | 72 passed / 0 failed / 1 skipped (`@blocked-by-module`), twice in a row on one database (re-measured 2026-11-14) | ~2 min first, ~1 min after |
 | `make bdd TAGS=@order-mail` (dev mode, fresh seed, `make mail`) | 12 passed, twice in a row on one database (measured 2026-11-12); the first run after a seed waits up to a minute per e-mail while the worker drains the seed's tasks | ~1.5 min first, ~15 s after |
 | `make bdd TAGS=@stock-alerts` (dev mode, fresh seed, `make mail`) | 11 passed, twice in a row on one database (measured 2026-11-12) | ~3 min |
