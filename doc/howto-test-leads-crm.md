@@ -139,16 +139,16 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
 ### A. A salesperson's day — desktop, `manager`, about 25 minutes
 
 **A1. Morning**
-1. Open `/crm` → **Today**. The side menu has seven entries: Today, Inbox, Companies, Deals, Approvals,
-   Reports, Settings.
+1. Open `/crm` → **Today**. The side menu has eight entries: Today, Inbox, Companies, Deals, Approvals,
+   Reports, History, Settings.
 2. "Due now" holds five tasks, overdue before today's ("Overdue 2 days", "Today 23:30").
 3. "Waiting" shows the number of drafts to approve and of replies that need review.
 4. Click the task "Call back about the offer" → the card of Example Shop 4 on Tasks. Back → Today, same chip.
 
 **A2. Drafts**
 1. Inbox → Drafts → the first row → **Review**: "From sales1@greenmail.test", the recipient, "Draft 1 of N".
-2. **Skip** → the next draft opens at once with the line "Skipped — this mail will not be sent" above it; nothing
-   covers the buttons.
+2. **Skip** → the next draft opens at once with the line "Skipped — this mail will not be sent" above it and,
+   for a few seconds, **Undo** beside it; nothing covers the buttons.
 3. **Send** → the next draft with "Accepted — goes out within minutes".
 4. `make mail-look` → within two minutes the mail is in the sandbox, from `sales1@greenmail.test`, with the legal
    footer and the unsubscribe headers.
@@ -187,8 +187,8 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
    field → the deal card, in the first open stage.
 2. **Mark won** → "Won". The ⋮ menu → **Archive** → "Archived", the only action is Restore, the details are
    read-only.
-3. Deals → the **Archived** button beside "Open deal" (always there, also over an empty "Mine" list) → the
-   archived deals; the status filter is gone. The button again → the usual list.
+3. Deals → the tabs **Active** · **Archived** under the header (always there, also over an empty "Mine" list) →
+   **Archived**: the archived deals; the status filter is gone. **Active** → the usual list.
 4. Open the archived deal → **Restore** → a won deal with Reopen again.
 5. Deals → **Board** → "Show all deals": drag a card to the next stage, then to **Lost** → a question for the
    reason; Cancel puts the card back; with a reason it stays in Lost. Column totals are per currency.
@@ -219,7 +219,9 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
    adds 10, and fits its card.
 5. Settings → **Do not contact** → **Add to the list**: "Reach" with "This channel" / "All channels". Add a
    domain → it is listed with that reach.
-6. Settings → **Custom fields** → Add field → fill only Label → Save → "Give the key" on the field.
+6. Settings → **Custom fields** → **Add field** → type the Label "Pole testowe" → Key fills itself with
+   `pole_testowe` (the hint under it: "Filled in from the label: …"). Clear the Key → **Save** → "Give the key" on
+   the field.
 7. Settings → **Deal stages** → the bin of a stage that holds deals → "N deals stand in this stage. Move them
    first.", no Delete.
 8. Settings → **Templates**: a line under the heading says where templates come from; no "Add" on purpose.
@@ -232,15 +234,21 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
    Test Import Beta;beta-import.test;;Kowalska, Anna;Kierownik zakupów;
    ```
 
-   → before anything is imported, a mapping step: every column of the file with the CRM field proposed for it
-   (company name, website, email, full name, job title), how sure the proposal is ("certain" / "to check" /
-   "not recognised") and sample values; `NIP` is "not recognised" (no such field in the CRM) unless the channel has a
-   custom field named NIP. Change one field from the list (or "Skip"), the preview of the first 5 rows follows the
-   change. **Import** → the result in sentences and which column went where; the companies are named
-   "Test Import Alfa / Beta" (not their domains), Anna Kowalska is split into first and last name. The test package
-   has the same files: `package/leads--human-headers-pl.csv`, `package/leads--human-headers.xlsx`.
+   Choose the file → **Check the columns** → before anything is imported, the table "Check the columns": every
+   column of the file with its sample values, the "Field in CRM" proposed for it (Company name, Website, E-mail,
+   Full name, Job title) and, under "Proposal", how sure it is: "Sure", "Check it" or "Not recognised". `NIP` reads
+   "Check it" with "looks like a tax number (NIP / VAT), but CRM has no such field" and goes nowhere, unless the
+   channel has a custom field named NIP. Change one field from the list, or pick "Skip this column" (the column
+   then reads "Skipped"): "The first rows after the mapping" follows the change. **Import** is greyed out while
+   two columns go to one field ("also chosen for: …"), while Full name stands beside First or Last name, and
+   while no column goes to the domain, the website or the e-mail address; each case says so under the table.
+   **Import** → the counts ("… created, … matched, … skipped") and "Where the columns went", one line per column;
+   the companies are named "Test Import Alfa / Beta" (not their domains), Anna Kowalska is split into first and
+   last name. The test package has the same files: `package/leads--human-headers-pl.csv`,
+   `package/leads--human-headers.xlsx`.
 10. **Reports**: the period calendar opens; the funnel has "% of the first stage" in every row.
-11. An address like `/crm/anything` → "Page not found" with a link to Today.
+11. An address like `/crm/anything` → "Page not found" with a link to Today. An old address of the panel,
+    `/leads/companies`, lands on `/crm/companies` (every `/leads/…` address redirects to `/crm/…`).
 
 ### D. Read-only — `viewer`, about 5 minutes
 
