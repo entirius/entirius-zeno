@@ -1,6 +1,6 @@
-# How to test the Leads CRM from `develop`
+# How to test the CRM from `develop`
 
-The Leads CRM landed on `develop` on 2026-11-14 in eight repositories. It is not released: no module version on
+The CRM landed on `develop` on 2026-11-14 in eight repositories. It is not released: no module version on
 PyPI, no CMS release, no page on docs.entirius.com. This guide is the hand-over for the test round that comes
 before all of that: how to stand the stack up from the `develop` branches, what changed, what to walk through and
 in which order, and what happens with the findings. The product documentation is written after this round is
@@ -52,23 +52,32 @@ Checks, all must hold before the walk:
 |---|---|
 | `make health` | `All services OK` |
 | `scripts/crm-walk-data.sh` | `SEED OK`, `72 scenarios passed, 0 failed, 1 skipped`, six `201`, `All services OK` |
-| CMS at http://localhost:8180/leads as `manager` / `manager123` | Today with five tasks under "Due now" |
+| CMS at http://localhost:8180/crm as `manager` / `manager123` | Today with five tasks under "Due now" |
 | `grep -H __version__ repos/django/entirius-django-{leads,communicator,todo,notifications}/src/*/__init__.py` | leads 0.5.0, communicator 0.5.0, todo 0.1.0, notifications 0.3.0 |
 
-If the Leads menu shows only the old screens, the module versions are below 0.5.0: a clone is not on `develop`
+If the CRM menu shows only the old screens, the module versions are below 0.5.0: a clone is not on `develop`
 (`git -C repos/django/entirius-django-leads status`).
 
-The AI toolbox is optional for this round. With `AI_TOOLBOX_ENABLED=0` (the default) every step of the scenario
-works; "Rewrite" on a draft and drafts written by a rule are refused with a sentence that says so. With the fake
-toolbox up (`make toolbox-check` green) they answer with placeholder text. Never point the stack at a real model
-for this.
+Part A needs the fake AI toolbox: it writes the drafts that A1.3 ("Waiting") and A2 review. Set
+`AI_TOOLBOX_ENABLED=1` in `.env`, start the toolbox with its fake models and check `make toolbox-check` is green
+before `scripts/crm-walk-data.sh`. With `AI_TOOLBOX_ENABLED=0` (the `.env.example` default) the seed and `@crm`
+still pass, but the review queue stays empty, so A1.3 shows 0 and A2 cannot be walked; parts B–D and the rest of
+A work, and "Rewrite" on a draft is refused with a sentence that says so. `scripts/crm-walk-data.sh` checks the
+toolbox first: enabled but not answering, it stops before the seed (otherwise every draft would fail with
+`ToolboxConnectionError` while the run goes green); disabled, it warns that there will be no drafts. Never point
+the stack at a real model for this.
+
+Back to work after a Docker (or computer) restart: `make resume`. It runs `make dev`, `make mail` and
+`make cms-dev`, starts the storefront from its container, checks the toolbox and ends with `make health`; the data
+stays as it was. The toolbox runs outside zeno: when `make resume` says it is not answering, start it in its own
+repository (`runserver 0.0.0.0:8300`) and run `make toolbox-check` again.
 
 A clean start at any time: `scripts/crm-walk-data.sh` again. Tasks and the send window only, on the data that is
 there: `SEED=0 scripts/crm-walk-data.sh`.
 
 | What | Where |
 |---|---|
-| Panel | http://localhost:8180/leads |
+| Panel | http://localhost:8180/crm |
 | Salesperson | `manager` / `manager123` (Anna Kowalska, mailbox `sales1@greenmail.test`) |
 | Second salesperson | `editor` / `editor123` (Piotr Lis, mailbox `sales2@greenmail.test`) |
 | Administrator | `admin` / `admin123` |
@@ -89,7 +98,7 @@ administrator sets the process up and watches the sending.
 | `entirius-django-communicator` 0.5.0 | a mailbox per salesperson with warm-up, caps and an automatic pause, send windows, follow-up sequences, reply types with a plan each, approvals, the conversation timeline, the recipient check before every approval and delivery |
 | `entirius-django-todo` 0.1.0 (new) | tasks about any object, with a due date, a today list and reminders |
 | `entirius-django-notifications` 0.3.0 | the notification kinds and titles of the CRM alerts |
-| `entirius-pwa-cms` | the Leads panel: Today, Inbox and Review, Companies, the company card, Deals with the board, Approvals, Reports, Settings |
+| `entirius-pwa-cms` | the CRM panel: Today, Inbox and Review, Companies, the company card, Deals with the board, Approvals, Reports, Settings |
 | `entirius-service-volkanos` | the tasks module and the CRM settings in the registry |
 | `entirius-test-package-emporium` | the CRM seed (two mailboxes, owners, stages), the `@crm` features, the e2e helpers |
 | `entirius-zeno` | recipe, settings and beat entries for the CRM, the GreenMail SMTPS backend, this guide, `scripts/crm-walk-data.sh` |
@@ -130,16 +139,16 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
 ### A. A salesperson's day — desktop, `manager`, about 25 minutes
 
 **A1. Morning**
-1. Open `/leads` → **Today**. The side menu has seven entries: Today, Inbox, Companies, Deals, Approvals,
-   Reports, Settings.
+1. Open `/crm` → **Today**. The side menu has eight entries: Today, Inbox, Companies, Deals, Approvals,
+   Reports, History, Settings.
 2. "Due now" holds five tasks, overdue before today's ("Overdue 2 days", "Today 23:30").
 3. "Waiting" shows the number of drafts to approve and of replies that need review.
 4. Click the task "Call back about the offer" → the card of Example Shop 4 on Tasks. Back → Today, same chip.
 
 **A2. Drafts**
 1. Inbox → Drafts → the first row → **Review**: "From sales1@greenmail.test", the recipient, "Draft 1 of N".
-2. **Skip** → the next draft opens at once with the line "Skipped — this mail will not be sent" above it; nothing
-   covers the buttons.
+2. **Skip** → the next draft opens at once with the line "Skipped — this mail will not be sent" above it and,
+   for a few seconds, **Undo** beside it; nothing covers the buttons.
 3. **Send** → the next draft with "Accepted — goes out within minutes".
 4. `make mail-look` → within two minutes the mail is in the sandbox, from `sales1@greenmail.test`, with the legal
    footer and the unsubscribe headers.
@@ -178,20 +187,20 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
    field → the deal card, in the first open stage.
 2. **Mark won** → "Won". The ⋮ menu → **Archive** → "Archived", the only action is Restore, the details are
    read-only.
-3. Deals → the **Archived** button beside "Open deal" (always there, also over an empty "Mine" list) → the
-   archived deals; the status filter is gone. The button again → the usual list.
+3. Deals → the tabs **Active** · **Archived** under the header (always there, also over an empty "Mine" list) →
+   **Archived**: the archived deals; the status filter is gone. **Active** → the usual list.
 4. Open the archived deal → **Restore** → a won deal with Reopen again.
 5. Deals → **Board** → "Show all deals": drag a card to the next stage, then to **Lost** → a question for the
    reason; Cancel puts the card back; with a reason it stays in Lost. Column totals are per currency.
 
 ### B. Phone — 390 × 844, `manager`, about 10 minutes
 
-1. `/leads` → Today; the bottom bar: Today · Inbox · Companies · Deals. Nothing scrolls sideways.
+1. `/crm` → Today; the bottom bar: Today · Inbox · Companies · Deals. Nothing scrolls sideways.
 2. A whole task row opens its company; "Mark done" is in reach.
 3. Inbox → Drafts → Review: "Swipe right to send, left to skip". After **Skip** the next draft's **Send** works
    at once.
 4. Company card → Tasks → Log call: one field.
-5. Deals: a list grouped by stage with the value; `/leads/deals/board` shows the list and a sentence that the
+5. Deals: a list grouped by stage with the value; `/crm/deals/board` shows the list and a sentence that the
    board is for a larger screen.
 
 ### C. Administrator — desktop, `admin`, about 15 minutes
@@ -202,17 +211,44 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
    `sales1` → Approve → "0 drafts approved. 1 not approved.", the reason in the Problem column, the row stays
    ticked. Then Mailboxes → **Resume**.
 3. Settings → **Mailboxes** → `sales1@greenmail.test` → **Test login** → "Login works" for SMTP and IMAP.
-4. Settings → **Sending health**: "Sent" and "Sent today" agree; the pause log fits its card.
+4. Settings → **Sending health**: each count names its period. "Sent (last 24 h)" / "Sent (last 7 days)" (by the
+   range switch) counts the deliveries back from now; "Sent today (since 00:00)" counts the channel's calendar day
+   from midnight, and the note under the table names the channel timezone. They need not agree: in the morning the
+   24 h window still holds most of yesterday (and BDD runs of the day before). A delivery is a mail sent, one
+   delivered without SMTP in sandbox, or one that bounced. The pause log shows the newest 10 entries, **Show more**
+   adds 10, and fits its card.
 5. Settings → **Do not contact** → **Add to the list**: "Reach" with "This channel" / "All channels". Add a
    domain → it is listed with that reach.
-6. Settings → **Custom fields** → Add field → fill only Label → Save → "Give the key" on the field.
+6. Settings → **Custom fields** → **Add field** → type the Label "Pole testowe" → Key fills itself with
+   `pole_testowe` (the hint under it: "Filled in from the label: …"). Clear the Key → **Save** → "Give the key" on
+   the field.
 7. Settings → **Deal stages** → the bin of a stage that holds deals → "N deals stand in this stage. Move them
    first.", no Delete.
 8. Settings → **Templates**: a line under the heading says where templates come from; no "Add" on purpose.
-9. **Companies → Import**: a small CSV (`name,domain,email` and two companies) → the result in sentences, ignored
-   columns named.
+9. **Companies → Import** with a file named the way people name spreadsheet columns, `.csv` or `.xlsx`, for example
+   (`;`-separated, Windows-1250 or UTF-8 — both are read):
+
+   ```
+   Nazwa firmy;Strona WWW;Adres e-mail;Imię i nazwisko;Stanowisko;NIP
+   Test Import Alfa;https://www.alfa-import.test;jan.nowak@alfa-import.test;Jan Nowak;Prezes;5260250274
+   Test Import Beta;beta-import.test;;Kowalska, Anna;Kierownik zakupów;
+   ```
+
+   Choose the file → **Check the columns** → before anything is imported, the table "Check the columns": every
+   column of the file with its sample values, the "Field in CRM" proposed for it (Company name, Website, E-mail,
+   Full name, Job title) and, under "Proposal", how sure it is: "Sure", "Check it" or "Not recognised". `NIP` reads
+   "Check it" with "looks like a tax number (NIP / VAT), but CRM has no such field" and goes nowhere, unless the
+   channel has a custom field named NIP. Change one field from the list, or pick "Skip this column" (the column
+   then reads "Skipped"): "The first rows after the mapping" follows the change. **Import** is greyed out while
+   two columns go to one field ("also chosen for: …"), while Full name stands beside First or Last name, and
+   while no column goes to the domain, the website or the e-mail address; each case says so under the table.
+   **Import** → the counts ("… created, … matched, … skipped") and "Where the columns went", one line per column;
+   the companies are named "Test Import Alfa / Beta" (not their domains), Anna Kowalska is split into first and
+   last name. The test package has the same files: `package/leads--human-headers-pl.csv`,
+   `package/leads--human-headers.xlsx`.
 10. **Reports**: the period calendar opens; the funnel has "% of the first stage" in every row.
-11. An address like `/leads/anything` → "Page not found" with a link to Today.
+11. An address like `/crm/anything` → "Page not found" with a link to Today. An old address of the panel,
+    `/leads/companies`, lands on `/crm/companies` (every `/leads/…` address redirects to `/crm/…`).
 
 ### D. Read-only — `viewer`, about 5 minutes
 
@@ -233,7 +269,7 @@ Not findings of this round:
 - On the phone the grey "Actions" caption above the buttons and the place of toasts outside Review belong to the
   shell of every CMS panel.
 - The deals board and Approvals are desktop screens.
-- CMS visual baselines for the Leads screens are not approved yet; `npm run visual:ux` compares nothing for them.
+- CMS visual baselines for the CRM screens are not approved yet; `npm run visual:ux` compares nothing for them.
 - `make bdd`: the scenario SA-6 of `@stock-alerts` can fail when the beat's restock check (every five minutes)
   runs in the middle of it; alone it passes.
 - Until the module releases, only the developer stack works on `develop`: `make setup` without `DEV=1` builds the

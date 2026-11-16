@@ -6,13 +6,13 @@ review queue; that company already has a replied thread from `make e2e-funnel` (
 
 | Step | Do | Expected |
 |---|---|---|
-| 3 | Open the panel switcher → Leads (or `/leads/inbox`) | Inbox lists at least one draft to review; the bell shows the unread count |
+| 3 | Open the panel switcher → CRM (or `/crm/inbox`) | Inbox lists at least one draft to review; the bell shows the unread count |
 | 4 | Open the draft; read it as a salesperson; open "More actions" → try "Rewrite with a note" (cancel is fine), "Edit" (then Cancel); then Send | ≤ 3 taps from Inbox to sent; after Send "Scheduled HH:MM" for ~2 s, then the next draft or the empty Inbox saying how many are scheduled and when the next goes out |
 | 5 | From the draft header open the company thread | Timeline shows the outbound mail with a status badge; intel & hooks card collapsed above it |
 | 6 | Open the thread of the Setup company from the bell or the draft header | The reply is a left bubble under the sent mail, readable |
 | 7 | Tap the bell → tap the "Reply from …" row | One tap marks it read and opens that company's thread; the count drops |
 
-| 1-2 | At 1280x800 open Leads -> Import, upload nothing, read the screen; then Board and Stages | Import explains what a CSV needs and what happens next; Board shows the stages with companies; Stages lists the configured stages |
+| 1-2 | At 1280x800 open CRM -> Import, upload nothing, read the screen; then Board and Stages | Import explains what a CSV needs and what happens next; Board shows the stages with companies; Stages lists the configured stages |
 | L-15 | At 1280x800 open a company card of a company that is also a shop customer | The card says the company is a known customer and links to it |
 | Send now (C-31) | At 1280x800 open Communicator -> Settings; in the scheduled mails table use Send now on a waiting mail (Review has no Send now: Send there schedules by the send policy) | The row shows "next beat" instead of its slot; send policy caps and mode still apply |
 

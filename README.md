@@ -55,7 +55,10 @@ access ships in the service lock since service 4.0.0.
 
 ## Requirements
 
-- Docker with Compose v2, git, GNU make, Python 3, curl and bash.
+- Linux or macOS. Docker with Compose v2, git, GNU make 3.81+, Python 3.9+, bash 3.2+, curl and jq — a clean Mac
+  (`/usr/bin/make`, `/usr/bin/python3`, `/bin/bash`) is enough. The setup, seed and test scripts use no GNU-only
+  `date` options and no bash 4 builtins; check a change with `/bin/bash -n` and `python3 -m py_compile` under those
+  oldest versions. The operator tools (`scripts/dev-runner/`, `scripts/pr-review/`) expect GNU sed (Linux).
 - `uv` on the host for `make bdd` and `make e2e`.
 - `gh`, authenticated, for `make clone-repos` (developer stack only).
 - Free host ports: the standard ones shifted by +100 (PostgreSQL 5532, Redis 6479, RabbitMQ 5772, backend 8100), so
@@ -65,7 +68,7 @@ access ships in the service lock since service 4.0.0.
 
 - [Testing the platform: first run, seeding, BDD and e2e](https://github.com/entirius/entirius-zeno/blob/develop/doc/howto-test.md)
 - [Developing with the harness: dev mode, commands, configuration](https://github.com/entirius/entirius-zeno/blob/develop/doc/howto-develop.md)
-- [Testing the Leads CRM from develop: setup, what changed, the walk](https://github.com/entirius/entirius-zeno/blob/develop/doc/howto-test-leads-crm.md)
+- [Testing the CRM from develop: setup, what changed, the walk](https://github.com/entirius/entirius-zeno/blob/develop/doc/howto-test-leads-crm.md)
 - [All guides](https://github.com/entirius/entirius-zeno/tree/develop/doc)
 - [Entirius documentation](https://docs.entirius.com/)
 

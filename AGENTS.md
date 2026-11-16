@@ -13,6 +13,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make clone-repos` | https clones of all entirius repos into `repos/` groups, modules at uv.lock versions (`gh` lists the org) |
 | `make build` / `up` / `down` | build image (`BUILD_ARGS="--no-cache --pull"` = cold build; also on `pwa` / `cms`), start/stop the stack (service, worker, beat) |
 | `make dev` / `link` | dev mode: mount `repos/`, editable-install module clones |
+| `make resume` | after a Docker restart, back to the state of `make setup DEV=1`: `dev`, `mail`, `cms-dev`, storefront from its container ("no container" and "failed to start" are told apart), `embed` when its container exists, toolbox checked only (says how to start it), `health`; the data stays |
 | `make migrate` / `test` / `health` | migrations, service test suite (postgres), stack health |
 | `make module-test MODULE=x` | a mounted module's own pytest suite (`repos/django/x`) inside the service container; installs the module's `test` extra first (the next `make dev` sync drops it) |
 | `make embed` | image-embedding service (Infinity, :8097, loopback only) for the lookup module; GPU auto-detected, `EMBED_GPU=0/1` forces; `make dev` keeps it in the stack when it is up |
@@ -21,7 +22,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make mail-look` / `mail-check` | copy the newest GreenMail messages (`MAIL_LOOK_LIMIT`, 50) into an emptied Mailpit and print its URL; `mail-check` sends one sample of every `django_email` type in every language to its own mailbox and checks only that one (`MAIL_CHECK_SEND=0` = no samples, the newest messages of every mailbox), red when Mailpit's HTML check finds a feature some mail client does not support for a message whose subject matches `MAIL_CHECK_SUBJECT` (regex, default every message), unless `scripts/mail-check-allowlist.txt` names it with a reason |
 | `make toolbox-check` | AI toolbox (outside zeno, `AI_TOOLBOX_*` in `.env`) answers for the test channel and exposes only `fake` models; red on any real model; `AI_TOOLBOX_ENABLED=0` → reports disabled, exit 0 |
 | `make e2e-funnel` / `e2e-accept` | leads funnel e2e twice (`E2E_DEVICE="iPhone 14"`, then desktop); AI-tester acceptance run (ux-tester role, needs `make runner-init`; report in `.runner/accept/<ts>/`; `ACCEPT=leads-funnel`, `leads-crm` (phone), `leads-crm-desktop`, `leads-crm-admin`, `ai-studio`) |
-| `scripts/crm-walk-data.sh` | data for a walk through the Leads CRM: fresh seed, one `@crm` run, six tasks for `manager`, send window open all day (`SEED=0` keeps the database); the walk itself is `doc/howto-test-leads-crm.md` |
+| `scripts/crm-walk-data.sh` | data for a walk through the CRM: fresh seed, one `@crm` run, six tasks for `manager`, send window open all day (`SEED=0` keeps the database); stops first when the toolbox is enabled but not answering, warns when it is disabled (no drafts for part A); the walk itself is `doc/howto-test-leads-crm.md` |
 | `make clone-tests` / `seed` / `bdd` | Emporium test package: clone to `repos/tests/`, seed the DB (needs the `worker` container up), behave suite (`TAGS=@tag`) |
 | `make pwa` / `cms` / `frontends` | storefront (:3100) and admin CMS (:8180), each built from its GitHub repo |
 | `make cms-dev` | admin CMS served from `repos/pwa/entirius-pwa-cms` with hot reload |
@@ -72,7 +73,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | Gate | Expected | Takes |
 |---|---|---|
 | `make seed` | `SEED OK` | ~8-15 min |
-| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1374 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-14 on `develop` with the Leads CRM merged, one fresh seed; a run earlier that day had one failure, SA-6 of `@stock-alerts`, see Gotchas) | ~6.5 min |
+| `make bdd` (dev mode, fresh seed, `make mail`, toolbox up) | 1390 passed / 0 failed / 16 skipped, gate in `enforce` (re-measured 2026-11-16 with the CRM round of 2026-11-16 mounted: history, import column mapping, no AI CRM / prospecting; one fresh seed; SA-6 of `@stock-alerts` can fail when the beat fires mid-scenario, see Gotchas) | ~7 min |
 | `make bdd TAGS=@crm` (dev mode, fresh seed, `make mail`) | 72 passed / 0 failed / 1 skipped (`@blocked-by-module`), twice in a row on one database (re-measured 2026-11-14) | ~2 min first, ~1 min after |
 | `make bdd TAGS=@order-mail` (dev mode, fresh seed, `make mail`) | 12 passed, twice in a row on one database (measured 2026-11-12); the first run after a seed waits up to a minute per e-mail while the worker drains the seed's tasks | ~1.5 min first, ~15 s after |
 | `make bdd TAGS=@stock-alerts` (dev mode, fresh seed, `make mail`) | 11 passed, twice in a row on one database (measured 2026-11-12) | ~3 min |

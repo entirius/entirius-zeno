@@ -1,4 +1,4 @@
-## Scenario — CRM: a salesperson's day (Leads panel, flows 1–8), phone
+## Scenario — CRM: a salesperson's day (CRM panel, flows 1–8), phone
 
 Channel `default-europe` is in sandbox mode and every mail lands in the local mail sandbox (GreenMail, URL in the
 run context); nothing leaves the machine. The AI toolbox serves only `fake` models: draft and reply texts are
@@ -9,7 +9,7 @@ artificial; that is not a finding.
 
 **Logins.** Walk as the salesperson `manager` / `manager123` (owner of the seeded companies; the default mailbox
 is theirs). If a screen refuses that user, say so under Questions and continue as the administrator from the run
-context. The panel is Leads: `/leads` on the CMS URL of the run context.
+context. The panel is CRM: `/crm` on the CMS URL of the run context.
 
 **Budget of the session.** About 55 minutes. Create `report.md` with the three headings before the first flow and
 rewrite it after every flow, so an interrupted session still leaves a report. This scenario is the phone half of
@@ -28,7 +28,7 @@ the same two screens. Everything else in the theme and language the CMS opens in
 
 | Phone (390 × 844) | Desktop (1280 × 800) |
 |---|---|
-| Open `/leads` → Today is shown; bottom bar Today · Inbox · Companies · Deals | Open `/leads` → Today; the sidebar shows 7 entries: Today, Inbox, Companies, Deals, Approvals, Reports, Settings |
+| Open `/crm` → Today is shown; bottom bar Today · Inbox · Companies · Deals | Open `/crm` → Today; the sidebar shows 7 entries: Today, Inbox, Companies, Deals, Approvals, Reports, Settings |
 | The "waiting" counters match the Inbox Drafts count and the replies that need review | same |
 | Chip Due lists overdue before today; due badges read "Overdue N days" / "Today HH:MM" | same, plus Company / deal and Kind columns |
 | Tap a task text → company card on Tasks (or the deal card); back → Today, chip kept | same |
@@ -144,19 +144,19 @@ there goes into the report at its old severity with the words "still there". The
   sequence resumes on …"), the same in the bubble and in History; on the phone the whole task row of Today opens
   it and no status badge is cut; in Polish the List / Board switch and every History line are Polish; Escape with
   the calendar open closes the calendar only, the week starts on Monday; an Inbox row carries one "Replied"; an
-  unknown Leads address shows a not-found page with a way back.
+  unknown CRM address shows a not-found page with a way back.
 - New since the third walk: a won or lost deal can be archived from its card (more menu → Archive) and
   restored from the archived card; archived deals are shown only by the "Archived" button of the Deals list (never as a value of the status
   filter) and on no board; an open
   deal cannot be archived (it has Delete deal).
 
-Decided earlier, not findings: the panel is "Leads · Leady" and the kind of a company is "Company type · Typ
+Decided earlier, not findings: the panel is "CRM" in both languages and the kind of a company is "Company type · Typ
 firmy"; a user without a first and last name is shown by login (`admin` has none); a conversation that belongs to
 no company shows the other side's address; a logged call writes two History lines (added, done); a task can be
 cancelled without a reason; the bell's own date format; stage names, deal stage names, custom field labels and template keys are the channel's own data
 and are shown as stored, also under the Polish interface; a Polish legal footer under an English body is the
 seeded channel; "AI this month" in the top bar is not part of this panel; toasts, the "Actions" caption above the
-primary button and the Filters panel are the shell of every CMS panel, not of Leads (a minor at most); "drafts to approve" on Today opens Approvals on the desktop and Inbox →
+primary button and the Filters panel are the shell of every CMS panel, not of CRM (a minor at most); "drafts to approve" on Today opens Approvals on the desktop and Inbox →
 Drafts on the phone; a contact's role ("Owner", "Warehouse") is the contact's job title as stored; a reply
 without a type and without the review flag reads "Reply from <company>" in the bell; the dismiss button of a
 confirm dialog is "Cancel".
