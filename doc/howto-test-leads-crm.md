@@ -211,15 +211,34 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
    `sales1` → Approve → "0 drafts approved. 1 not approved.", the reason in the Problem column, the row stays
    ticked. Then Mailboxes → **Resume**.
 3. Settings → **Mailboxes** → `sales1@greenmail.test` → **Test login** → "Login works" for SMTP and IMAP.
-4. Settings → **Sending health**: "Sent" and "Sent today" agree; the pause log fits its card.
+4. Settings → **Sending health**: each count names its period. "Sent (last 24 h)" / "Sent (last 7 days)" (by the
+   range switch) counts the deliveries back from now; "Sent today (since 00:00)" counts the channel's calendar day
+   from midnight, and the note under the table names the channel timezone. They need not agree: in the morning the
+   24 h window still holds most of yesterday (and BDD runs of the day before). A delivery is a mail sent, one
+   delivered without SMTP in sandbox, or one that bounced. The pause log shows the newest 10 entries, **Show more**
+   adds 10, and fits its card.
 5. Settings → **Do not contact** → **Add to the list**: "Reach" with "This channel" / "All channels". Add a
    domain → it is listed with that reach.
 6. Settings → **Custom fields** → Add field → fill only Label → Save → "Give the key" on the field.
 7. Settings → **Deal stages** → the bin of a stage that holds deals → "N deals stand in this stage. Move them
    first.", no Delete.
 8. Settings → **Templates**: a line under the heading says where templates come from; no "Add" on purpose.
-9. **Companies → Import**: a small CSV (`name,domain,email` and two companies) → the result in sentences, ignored
-   columns named.
+9. **Companies → Import** with a file named the way people name spreadsheet columns, `.csv` or `.xlsx`, for example
+   (`;`-separated, Windows-1250 or UTF-8 — both are read):
+
+   ```
+   Nazwa firmy;Strona WWW;Adres e-mail;Imię i nazwisko;Stanowisko;NIP
+   Test Import Alfa;https://www.alfa-import.test;jan.nowak@alfa-import.test;Jan Nowak;Prezes;5260250274
+   Test Import Beta;beta-import.test;;Kowalska, Anna;Kierownik zakupów;
+   ```
+
+   → before anything is imported, a mapping step: every column of the file with the CRM field proposed for it
+   (company name, website, email, full name, job title), how sure the proposal is ("certain" / "to check" /
+   "not recognised") and sample values; `NIP` is "not recognised" (no such field in the CRM) unless the channel has a
+   custom field named NIP. Change one field from the list (or "Skip"), the preview of the first 5 rows follows the
+   change. **Import** → the result in sentences and which column went where; the companies are named
+   "Test Import Alfa / Beta" (not their domains), Anna Kowalska is split into first and last name. The test package
+   has the same files: `package/leads--human-headers-pl.csv`, `package/leads--human-headers.xlsx`.
 10. **Reports**: the period calendar opens; the funnel has "% of the first stage" in every row.
 11. An address like `/crm/anything` → "Page not found" with a link to Today.
 
