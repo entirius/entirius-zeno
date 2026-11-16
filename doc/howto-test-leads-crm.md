@@ -211,7 +211,12 @@ not come back): for a second pass run `scripts/crm-walk-data.sh` again.
    `sales1` → Approve → "0 drafts approved. 1 not approved.", the reason in the Problem column, the row stays
    ticked. Then Mailboxes → **Resume**.
 3. Settings → **Mailboxes** → `sales1@greenmail.test` → **Test login** → "Login works" for SMTP and IMAP.
-4. Settings → **Sending health**: "Sent" and "Sent today" agree; the pause log fits its card.
+4. Settings → **Sending health**: each count names its period. "Sent (last 24 h)" / "Sent (last 7 days)" (by the
+   range switch) counts the deliveries back from now; "Sent today (since 00:00)" counts the channel's calendar day
+   from midnight, and the note under the table names the channel timezone. They need not agree: in the morning the
+   24 h window still holds most of yesterday (and BDD runs of the day before). A delivery is a mail sent, one
+   delivered without SMTP in sandbox, or one that bounced. The pause log shows the newest 10 entries, **Show more**
+   adds 10, and fits its card.
 5. Settings → **Do not contact** → **Add to the list**: "Reach" with "This channel" / "All channels". Add a
    domain → it is listed with that reach.
 6. Settings → **Custom fields** → Add field → fill only Label → Save → "Give the key" on the field.
