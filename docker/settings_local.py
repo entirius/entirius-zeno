@@ -8,6 +8,7 @@ and refreshed on every dev-mode start. Change .env on the host, not this file.
 
 import re
 import ssl as _ssl
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -24,6 +25,12 @@ DEBUG = config("DEBUG", default=True, cast=bool)
 API_SCHEMA_PUBLIC = True
 # No proxy in front of the service: per-IP throttles key on REMOTE_ADDR. Unset fails check --deploy (volkanos.E001).
 DRF_NUM_PROXIES = 0
+# The CMS e2e suite signs in once per test from one address: the default 30 logins a minute fails tests at random.
+# Extends the service's dict (this file is star-imported into main.settings); anon/user keep DRF's defaults.
+REST_FRAMEWORK = {
+    **sys.modules["main.settings"].REST_FRAMEWORK,
+    "DEFAULT_THROTTLE_RATES": {"anon": None, "user": None, "accounts_login_ip": "1000/min"},
+}
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,service", cast=Csv())
 
 # The recipe (recipes/<name>/ in zeno, mounted by compose) names the modules this stack enables; unset = shop.
