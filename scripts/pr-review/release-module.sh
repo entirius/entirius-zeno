@@ -10,10 +10,12 @@ git -C "$clone" fetch -q origin
 git -C "$clone" worktree remove --force "$W" 2>/dev/null || true
 git -C "$clone" worktree add -q --detach "$W" origin/develop
 cd "$W"
-grep -q '^## Unreleased' CHANGELOG.md || { echo "STOP: no ## Unreleased"; exit 1; }
+grep -qE '^## \[?Unreleased\]?' CHANGELOG.md || { echo "STOP: no ## Unreleased"; exit 1; }
+h="## $V — $D"
+grep -q '^## \[Unreleased\]' CHANGELOG.md && h="## [$V] - $D" # the Keep a Changelog heading of the older packages
 sed -i "0,/^version = \".*\"/s//version = \"$V\"/" pyproject.toml
-sed -i "0,/^## Unreleased.*/s//## $V — $D/" CHANGELOG.md
-awk -v h="## $V — $D" '$0==h{f=1;next} f&&/^## /{exit} f' CHANGELOG.md > "$N"
+sed -i -E "0,/^## \[?Unreleased\]?.*/s//$h/" CHANGELOG.md
+awk -v h="$h" '$0==h{f=1;next} f&&/^## /{exit} f' CHANGELOG.md > "$N"
 [ -s "$N" ] || { echo "STOP: empty notes"; exit 1; }
 uv lock -q
 uv sync -q --all-extras
