@@ -87,6 +87,7 @@ No application code lives here — compose + Makefile + Dockerfile only.
 | `make e2e E2E_ARGS="e2e/storefront e2e/mail"` (`make pwa PWA_SRC=local PWA_BRANCH=feature/stock-alerts`, `make mail`, fresh seed) | 6 passed; the stock-alert e-mail screenshots in the test package's `test-results/stock-alerts/` (measured 2026-11-12) | ~1.5 min |
 | `make e2e-funnel` (`make cms-dev`, after `make bdd TAGS=@funnel` on a fresh seed, `make mail`) | iPhone 14: 4 passed / 4 skipped · desktop: 8 passed (re-measured 2026-11-13) | ~45 s |
 | `make e2e E2E_ARGS="e2e/cms/ -k ai_studio"` (`make cms-dev`, `CMS_BASE_URL=http://localhost:8080` to the test-package make, fake toolbox) | 33 passed (measured 2026-10-15, twice) | ~6 min |
+| CMS clone: `npx playwright test` against a production build (fresh seed, toolbox up; `CMS_BASE_URL`, `VUE_APP_API_URL=http://localhost:8100`, `VUE_APP_CHANNEL=default-europe`, `VUE_APP_USERNAME=admin`, `VUE_APP_PASSWORD=admin123`) | 286 passed / 0 failed / 13 skipped (measured 2026-11-18) | ~10 min |
 | `make e2e-accept` (after `make e2e-funnel`, `make runner-init`) | exit 0, `report.md` with no item under `## Blockers` | ~15-40 min, ≤ `UX_CAP_USD` |
 | `make stranger-run RECIPE=shop TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 1265 passed / 0 failed / 29 skipped (measured 2026-11-04 on `release/4.2.0`) | 19 min |
 | `make stranger-run RECIPE=catalog TESTS_FROM=local BDD=1` (isolated stack) | `SEED OK` · `Smoke OK` · CMS 200 · storefront 200 · BDD 832 passed / 0 failed / 447 skipped (measured 2026-10-13) | 6 min |
@@ -153,6 +154,11 @@ Zeno is the harness — most bugs found here are fixed elsewhere:
 - With the toolbox enabled it must be up before seed (`make toolbox-check` green); with `AI_TOOLBOX_ENABLED=0` seed
   and BDD run without it and skip `@needs-toolbox`. It runs outside zeno (its own repo,
   `runserver 0.0.0.0:8300`), containers reach it as `host.docker.internal`.
+- The toolbox client `zeno-test` needs the tools `django_ai_completion`, `django_ai_translator` and `django_ai_tracker`
+  and the translator fixture (toolbox `docs/deploy-notes.md`). Without them `make toolbox-check` stays green, but every
+  CMS page logs a 503 from `usage/month/` and the translation screens a 502, which fails the CMS e2e error collector.
+- `make dev` leaves running containers alone when compose sees no change: after editing `docker/settings_local.py`
+  run `docker restart` on service, worker, worker-bulk and beat, so the entrypoint copies the file again.
 - Enrichment runs go through a work queue: a run is planned into units (`enrichment.plan_task`), workers claim them
   with a lease (`enrichment.consume`), and beat runs `enrichment.reap` every minute (expired leases back to the queue,
   stale-queue and failure alerts). A run spawned while `worker` / `worker-bulk` are down waits in RabbitMQ and runs
